@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building AI - 企业级智能体搭建平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #050505; color: white; overflow-x: hidden; font-family: 'Inter', sans-serif; }
+        /* 紫色光晕背景 */
+        .purple-glow {
+            position: absolute;
+            width: 800px; height: 800px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(0,0,0,0) 70%);
+            top: -200px; left: 50%; transform: translateX(-50%);
+            border-radius: 50%; pointer-events: none; z-index: -1;
+        }
+        /* 磨砂玻璃卡片 */
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* 3D 倾斜效果 */
+        .dashboard-3d {
+            transform: perspective(1000px) rotateY(-5deg) rotateX(2deg);
+            transition: transform 0.5s ease;
+        }
+        .dashboard-3d:hover { transform: perspective(1000px) rotateY(0deg) rotateX(0deg); }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <div class="purple-glow"></div>
+
+    <!-- 导航栏 -->
+    <nav class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/5 backdrop-blur-md sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">🚀</div>
+            <span class="font-bold text-lg tracking-wide">Building AI</span>
+        </div>
+        <div class="hidden md:flex gap-8 text-gray-400 text-sm">
+            <a href="#" class="hover:text-white transition">首页</a>
+            <a href="#" class="hover:text-white transition">应用市场</a>
+            <a href="#" class="hover:text-white transition">文档</a>
+        </div>
+        <div class="flex items-center gap-3">
+            <button class="glass px-3 py-1.5 rounded text-xs text-gray-300">🔍 搜索 Ctrl+K</button>
+            <button onclick="alert('登录逻辑已连接API')" class="bg-white text-black px-4 py-1.5 rounded-full text-sm font-bold hover:bg-gray-200 transition">登录</button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <main class="max-w-7xl mx-auto mt-16 px-6 grid lg:grid-cols-2 gap-16 items-center">
+        <!-- 左侧文字 -->
+        <div class="space-y-8">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-xs text-purple-300">
+                <span class="bg-purple-600 px-1 rounded text-white font-bold">NEW</span>
+                BuildingAI 应用市场上线
+            </div>
+            <h1 class="text-5xl md:text-6xl font-bold leading-tight">
+                面向 AI开发者<br>打造的企业级<br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">智能体搭建平台 ✨</span>
+            </h1>
+            <p class="text-gray-400 text-lg">它正在努力成为 AI 应用落地的首选方案，助您极致提升组织生产力。</p>
+            <div class="flex gap-4">
+                <button class="px-8 py-3 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-90 shadow-lg shadow-purple-500/30 font-medium transition">开源部署</button>
+                <button class="px-8 py-3 rounded-full bg-white text-black hover:bg-gray-100 font-medium transition">查看 Demo</button>
+            </div>
+            <div class="flex gap-6 pt-6 text-xs text-gray-500">
+                <span>⚡ AI原生内核</span>
+                <span>🔒 组织管理</span>
+                <span>🛠️ 二次开发</span>
+                <span>🎨 自定义LOGO</span>
+            </div>
+        </div>
+
+        <!-- 右侧图示 (模拟图2的Dashboard) -->
+        <div class="relative dashboard-3d">
+            <!-- 替换 dashboard.png 为你的实际图片路径，或者使用占位图 -->
+            <div class="bg-[#0f172a] rounded-xl border border-white/10 shadow-2xl p-2 overflow-hidden aspect-[16/10]">
+                 <div class="flex h-full">
+                     <!-- 模拟侧边栏 -->
+                     <div class="w-1/5 border-r border-white/5 p-2 space-y-2">
+                         <div class="h-8 bg-white/5 rounded"></div>
+                         <div class="h-4 w-2/3 bg-white/5 rounded mt-4"></div>
+                         <div class="h-4 w-3/4 bg-white/5 rounded"></div>
+                     </div>
+                     <!-- 模拟主内容区 -->
+                     <div class="flex-1 p-4 space-y-4">
+                         <div class="flex justify-between">
+                             <div class="h-8 w-1/3 bg-white/5 rounded"></div>
+                             <div class="h-8 w-8 bg-purple-500/20 rounded-full"></div>
+                         </div>
+                         <div class="h-32 bg-gradient-to-r from-purple-900/20 to-blue-900/20 rounded border border-white/5 flex items-center justify-center text-purple-300/50">数据可视化图表区域</div>
+                         <div class="space-y-2">
+                             <div class="h-10 bg-white/5 rounded flex items-center px-4 justify-between">
+                                 <span class="text-xs text-gray-500">项目 A</span>
+                                 <span class="text-xs text-green-500">Running</span>
+                             </div>
+                             <div class="h-10 bg-white/5 rounded flex items-center px-4 justify-between">
+                                 <span class="text-xs text-gray-500">项目 B</span>
+                                 <span class="text-xs text-yellow-500">Waiting</span>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+            </div>
+
+            <!-- 浮动标签 -->
+            <div class="absolute top-1/4 -left-4 glass px-4 py-2 rounded-lg text-purple-300 text-sm border-l-4 border-purple-500 shadow-lg animate-bounce">
+                🤖 智能体
+            </div>
+            <div class="absolute bottom-1/4 -right-4 glass px-4 py-2 rounded-lg text-pink-300 text-sm border-l-4 border-pink-500 shadow-lg">
+                🧩 插件市场
+            </div>
+        </div>
+    </main>
+</body>
+</html>
