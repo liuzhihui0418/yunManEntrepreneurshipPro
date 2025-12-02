@@ -3,17 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Building AI - 企业级智能体搭建平台</title>
+    <title>YunManGongFangAi</title>
+     <!-- 添加这行代码来设置浏览器标签图标 -->
+   <!-- 修改这一行，添加版本号和多种格式 -->
+    <link rel="icon" href="https://cdn.yunbaoymgf.chat/logo.png" type="image/png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #050505; color: white; overflow-x: hidden; font-family: 'Inter', sans-serif; }
+        body {
+            background-color: #050505;
+            color: white;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+        }
         /* 紫色光晕背景 */
         .purple-glow {
             position: absolute;
-            width: 800px; height: 800px;
+            width: 800px;
+            height: 800px;
             background: radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(0,0,0,0) 70%);
-            top: -200px; left: 50%; transform: translateX(-50%);
-            border-radius: 50%; pointer-events: none; z-index: -1;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: -1;
         }
         /* 磨砂玻璃卡片 */
         .glass {
@@ -26,11 +40,170 @@
             transform: perspective(1000px) rotateY(-5deg) rotateX(2deg);
             transition: transform 0.5s ease;
         }
-        .dashboard-3d:hover { transform: perspective(1000px) rotateY(0deg) rotateX(0deg); }
+        .dashboard-3d:hover {
+            transform: perspective(1000px) rotateY(0deg) rotateX(0deg);
+        }
+        /* 登录弹框样式 */
+        .login-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-modal.active {
+            display: flex;
+        }
+        .login-content {
+            width: 90%;
+            max-width: 400px;
+            background: rgba(20, 20, 30, 0.95);
+            border-radius: 12px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        .login-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(139, 92, 246, 0.1);
+        }
+        .login-form {
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(to right, #8b5cf6, #6366f1);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .login-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .login-footer {
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .error-message {
+            color: #f87171;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        .success-message {
+            color: #34d399;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: #ccc;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .user-info {
+            display: none;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(to right, #8b5cf6, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="min-h-screen relative">
     <div class="purple-glow"></div>
+
+    <!-- 登录弹框 -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-content">
+            <button id="closeLogin" class="close-btn">×</button>
+            <div class="login-header">
+                <h2 class="text-xl font-bold">邀请码登录</h2>
+                <p class="text-gray-400 text-sm mt-1">请输入您的邀请码</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="inviteCode">邀请码</label>
+                    <input
+                        type="text"
+                        id="inviteCode"
+                        class="form-control"
+                        placeholder="请输入您的邀请码"
+                        maxlength="16"
+                        required
+                    >
+                    <div id="codeError" class="error-message">邀请码格式不正确</div>
+                </div>
+                <button type="submit" id="loginButton" class="login-btn">
+                    <span id="loginText">登录</span>
+                    <span id="loginLoading" style="display: none;">验证中...</span>
+                </button>
+            </form>
+            <div id="loginSuccess" class="success-message" style="display: none;">
+                登录成功！正在跳转...
+            </div>
+            <div class="login-footer">
+                没有邀请码？请联系管理员获取
+            </div>
+        </div>
+    </div>
 
     <!-- 导航栏 -->
     <nav class="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/5 backdrop-blur-md sticky top-0 z-50">
@@ -45,7 +218,14 @@
         </div>
         <div class="flex items-center gap-3">
             <button class="glass px-3 py-1.5 rounded text-xs text-gray-300">🔍 搜索 Ctrl+K</button>
-            <button onclick="alert('登录逻辑已连接API')" class="bg-white text-black px-4 py-1.5 rounded-full text-sm font-bold hover:bg-gray-200 transition">登录</button>
+            <!-- 登录按钮 -->
+            <button id="loginBtn" class="bg-white text-black px-4 py-1.5 rounded-full text-sm font-bold hover:bg-gray-200 transition">登录</button>
+            <!-- 用户信息区域 -->
+            <div id="userInfo" class="user-info">
+                <div class="user-avatar" id="userAvatar">U</div>
+                <span id="userName" class="text-sm">用户</span>
+                <button id="logoutBtn" class="text-xs text-gray-400 hover:text-white">退出</button>
+            </div>
         </div>
     </nav>
 
@@ -115,5 +295,184 @@
             </div>
         </div>
     </main>
+
+    <script>
+        // DOM元素
+        const loginModal = document.getElementById('loginModal');
+        const loginBtn = document.getElementById('loginBtn');
+        const closeLogin = document.getElementById('closeLogin');
+        const loginForm = document.getElementById('loginForm');
+        const inviteCodeInput = document.getElementById('inviteCode');
+        const loginButton = document.getElementById('loginButton');
+        const loginText = document.getElementById('loginText');
+        const loginLoading = document.getElementById('loginLoading');
+        const codeError = document.getElementById('codeError');
+        const loginSuccess = document.getElementById('loginSuccess');
+        const userInfo = document.getElementById('userInfo');
+        const userName = document.getElementById('userName');
+        const userAvatar = document.getElementById('userAvatar');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        // 模拟后端API
+        const mockApi = {
+            // 验证邀请码
+            validateInviteCode: async (code) => {
+                // 模拟网络延迟
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // 模拟验证逻辑
+                const validCodes = ['YUNMAN2024', 'BUILDINGAI', 'INVITE123', 'TESTCODE'];
+
+                if (validCodes.includes(code.toUpperCase())) {
+                    return {
+                        success: true,
+                        user: {
+                            id: Math.floor(Math.random() * 1000),
+                            name: `用户${Math.floor(Math.random() * 1000)}`,
+                            avatar: code.toUpperCase().charAt(0)
+                        },
+                        token: 'mock_jwt_token_' + Date.now()
+                    };
+                } else {
+                    return {
+                        success: false,
+                        message: '邀请码无效或已过期'
+                    };
+                }
+            }
+        };
+
+        // 打开登录弹框
+        loginBtn.addEventListener('click', () => {
+            loginModal.classList.add('active');
+            inviteCodeInput.focus();
+        });
+
+        // 关闭登录弹框
+        closeLogin.addEventListener('click', () => {
+            loginModal.classList.remove('active');
+            resetLoginForm();
+        });
+
+        // 点击弹框外部关闭
+        loginModal.addEventListener('click', (e) => {
+            if (e.target === loginModal) {
+                loginModal.classList.remove('active');
+                resetLoginForm();
+            }
+        });
+
+        // 登录表单提交
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const code = inviteCodeInput.value.trim();
+
+            // 前端验证
+            if (!code) {
+                showError('请输入邀请码');
+                return;
+            }
+
+            if (code.length < 8) {
+                showError('邀请码长度至少8位');
+                return;
+            }
+
+            // 开始登录
+            setLoginLoading(true);
+            hideError();
+
+            try {
+                // 调用模拟API
+                const result = await mockApi.validateInviteCode(code);
+
+                if (result.success) {
+                    // 登录成功
+                    loginSuccess.style.display = 'block';
+
+                    // 保存用户信息到本地存储
+                    localStorage.setItem('user', JSON.stringify(result.user));
+                    localStorage.setItem('token', result.token);
+
+                    // 更新UI
+                    setTimeout(() => {
+                        loginModal.classList.remove('active');
+                        updateUserInterface(result.user);
+                        resetLoginForm();
+                    }, 1500);
+                } else {
+                    // 登录失败
+                    showError(result.message);
+                }
+            } catch (error) {
+                showError('网络错误，请稍后重试');
+            } finally {
+                setLoginLoading(false);
+            }
+        });
+
+        // 退出登录
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            userInfo.style.display = 'none';
+            loginBtn.style.display = 'block';
+        });
+
+        // 工具函数
+        function setLoginLoading(loading) {
+            if (loading) {
+                loginButton.disabled = true;
+                loginText.style.display = 'none';
+                loginLoading.style.display = 'inline';
+            } else {
+                loginButton.disabled = false;
+                loginText.style.display = 'inline';
+                loginLoading.style.display = 'none';
+            }
+        }
+
+        function showError(message) {
+            codeError.textContent = message;
+            codeError.style.display = 'block';
+            inviteCodeInput.focus();
+        }
+
+        function hideError() {
+            codeError.style.display = 'none';
+            loginSuccess.style.display = 'none';
+        }
+
+        function resetLoginForm() {
+            loginForm.reset();
+            hideError();
+            setLoginLoading(false);
+        }
+
+        function updateUserInterface(user) {
+            userName.textContent = user.name;
+            userAvatar.textContent = user.avatar;
+            userInfo.style.display = 'flex';
+            loginBtn.style.display = 'none';
+        }
+
+        // 页面加载时检查登录状态
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                const user = JSON.parse(savedUser);
+                updateUserInterface(user);
+            }
+        });
+
+        // 按ESC键关闭弹框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && loginModal.classList.contains('active')) {
+                loginModal.classList.remove('active');
+                resetLoginForm();
+            }
+        });
+    </script>
 </body>
 </html>
