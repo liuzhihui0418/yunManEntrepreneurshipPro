@@ -9,7 +9,7 @@ from dbutils.pooled_db import PooledDB
 class DatabaseManager:
     def __init__(self):
         self.db_config = {
-            'host': '43.135.26.58',
+            'host': '127.0.0.1',
             'port': 3306,
             'user': 'root',
             'password': 'Aini7758258!!',
