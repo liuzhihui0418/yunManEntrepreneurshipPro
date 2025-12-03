@@ -4,7 +4,7 @@ import multiprocessing
 # 监听地址 (内网)
 bind = "0.0.0.0:5000"
 # 开启后台运行 (守护进程)
-daemon = True
+daemon = False
 # 进程数 (核心数*2+1)
 workers = multiprocessing.cpu_count() * 2 + 1
 # 线程模式 (协程)
