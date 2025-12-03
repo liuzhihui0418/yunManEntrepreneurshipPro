@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>后台管理系统 - YunManGongFangAI</title>
     <link rel="icon" href="https://cdn.yunbaoymgf.chat/logo.png" type="image/png">
-<link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
             --primary-color: #8b5cf6;
@@ -558,12 +558,17 @@
             </div>
             <form id="createCodeForm">
                 <div class="form-group">
-                    <label class="form-label">邀请码</label>
-                    <input type="text" class="form-input" id="codeInput" placeholder="输入邀请码或留空自动生成">
+                    <label class="form-label">创建数量</label>
+                    <input type="number" class="form-input" id="createCount" value="1" min="1" max="50" required>
+                    <small style="color: rgba(255,255,255,0.5); font-size: 12px;">最多可批量创建50个</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">邀请码前缀（可选）</label>
+                    <input type="text" class="form-input" id="codePrefix" placeholder="输入前缀，留空则完全随机生成" maxlength="10">
                 </div>
                 <div class="form-group">
                     <label class="form-label">有效期（天）</label>
-                    <input type="number" class="form-input" id="expiryDays" value="7" min="1" max="365">
+                    <input type="number" class="form-input" id="expiryDays" value="7" min="1" max="365" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">备注信息</label>
@@ -596,8 +601,8 @@
         });
 
         window.addEventListener('mouseout', () => {
-             mouse.x = null;
-             mouse.y = null;
+            mouse.x = null;
+            mouse.y = null;
         });
 
         const properties = {
@@ -729,19 +734,29 @@
         // 模态框控制
         function showCreateModal() {
             document.getElementById('createModal').style.display = 'flex';
+            // 重置表单
+            document.getElementById('createCodeForm').reset();
+            document.getElementById('createCount').value = 1;
         }
 
         function hideCreateModal() {
             document.getElementById('createModal').style.display = 'none';
         }
 
-        // 创建邀请码表单提交
+        // 创建邀请码表单提交（批量创建）
         document.getElementById('createCodeForm').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            const code = document.getElementById('codeInput').value;
-            const expiryDays = document.getElementById('expiryDays').value;
+            const createCount = parseInt(document.getElementById('createCount').value);
+            const codePrefix = document.getElementById('codePrefix').value.trim();
+            const expiryDays = parseInt(document.getElementById('expiryDays').value);
             const note = document.getElementById('codeNote').value;
+
+            // 验证数量
+            if (createCount < 1 || createCount > 50) {
+                showNotification('创建数量必须在1-50之间', 'error');
+                return;
+            }
 
             const createBtn = this.querySelector('button[type="submit"]');
             const btnText = createBtn.querySelector('#createBtnText');
@@ -752,12 +767,13 @@
             createBtn.disabled = true;
 
             try {
-                const response = await fetch('/admin/codes', {
+                const response = await fetch('/admin/codes/batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        code: code || undefined, // 留空则自动生成
-                        expires_days: parseInt(expiryDays),
+                        count: createCount,
+                        prefix: codePrefix || undefined,
+                        expires_days: expiryDays,
                         note: note
                     })
                 });
@@ -767,6 +783,8 @@
                 if (result.success) {
                     hideCreateModal();
                     this.reset();
+                    document.getElementById('createCount').value = 1; // 重置数量
+                    showNotification(`成功创建 ${result.created_count} 个邀请码`, 'success');
                     loadCodesData();
                 } else {
                     showNotification(result.message || '创建失败', 'error');
@@ -780,214 +798,216 @@
             }
         });
 
+        // 添加数量输入框的实时验证
+        document.getElementById('createCount').addEventListener('input', function() {
+            const value = parseInt(this.value);
+            if (value < 1) this.value = 1;
+            if (value > 50) this.value = 50;
+        });
+
         // 加载数据看板
-      // 加载数据看板
-// 加载数据看板 - 修复路径
-// 加载数据看板
-async function loadDashboardData() {
-    try {
-         // 先显示局部 Loading，而不是让数字一直为 0
-        document.getElementById('total-codes').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
-        const response = await fetch('/admin/api/dashboard', {
-            credentials: 'include'
-        });
+        async function loadDashboardData() {
+            try {
+                // 先显示局部 Loading，而不是让数字一直为 0
+                document.getElementById('total-codes').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
+                const response = await fetch('/admin/api/dashboard', {
+                    credentials: 'include'
+                });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Dashboard data:', data);
+
+                if (data.success) {
+                    document.getElementById('total-codes').textContent = data.stats.total_codes;
+                    document.getElementById('active-users').textContent = data.stats.active_users;
+                    document.getElementById('today-usage').textContent = data.stats.today_usage;
+                    document.getElementById('expiring-codes').textContent = data.stats.expiring_codes;
+
+                    // 更新使用情况表格
+                    updateUsageTable(data.usage_data);
+                }
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                showNotification('加载数据失败: ' + error.message, 'error');
+            }
         }
-
-        const data = await response.json();
-        console.log('Dashboard data:', data);
-
-        if (data.success) {
-            document.getElementById('total-codes').textContent = data.stats.total_codes;
-            document.getElementById('active-users').textContent = data.stats.active_users;
-            document.getElementById('today-usage').textContent = data.stats.today_usage;
-            document.getElementById('expiring-codes').textContent = data.stats.expiring_codes;
-
-            // 更新使用情况表格 - 现在这个函数已定义
-            updateUsageTable(data.usage_data);
-        }
-    } catch (error) {
-        console.error('加载数据失败:', error);
-        showNotification('加载数据失败: ' + error.message, 'error');
-    }
-}
-
-// === 新增的缺失函数 ===
-function updateUsageTable(usageData) {
-    const tbody = document.getElementById('usage-table-body');
-
-    if (!usageData || usageData.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
-                    <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>
-                    暂无使用数据
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    tbody.innerHTML = usageData.map(item => `
-        <tr>
-            <td>${item.code || 'N/A'}</td>
-            <td>${item.created_at ? new Date(item.created_at).toLocaleString() : '未知'}</td>
-            <td>${item.expires_at ? new Date(item.expires_at).toLocaleString() : '永久'}</td>
-            <td><span class="status-badge ${getStatusClass(item)}">${getStatusText(item)}</span></td>
-            <td>${item.current_uses || 0}</td>
-            <td>
-                <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
-                        onclick="viewUsageDetails('${item.code}')" title="查看详情">
-                    <i class="fa-solid fa-eye"></i> 查看
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function viewUsageDetails(code) {
-    alert(`查看邀请码 ${code} 的使用详情 - 功能待实现`);
-}
-
-// 加载邀请码列表 - 同样需要修复
-// 改进的 loadCodesData 函数
-async function loadCodesData() {
-    try {
-        showLoading('codes-table-body');
-
-        const response = await fetch('/admin/codes', {
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP错误! 状态: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (data.success) {
-            updateCodesTable(data.codes);
-        } else {
-            throw new Error(data.message || '加载失败');
-        }
-    } catch (error) {
-        console.error('加载邀请码失败:', error);
-        showError('codes-table-body', '加载邀请码失败: ' + error.message);
-    }
-}
-
-// 显示加载状态
-function showLoading(elementId) {
-    const element = document.getElementById(elementId);
-    element.innerHTML = `
-        <tr>
-            <td colspan="6" style="text-align: center; padding: 40px;">
-                <div class="loader"></div>
-                <div style="margin-top: 15px; color: rgba(255,255,255,0.7);">加载中...</div>
-            </td>
-        </tr>
-    `;
-}
-
-// 显示错误信息
-function showError(elementId, message) {
-    const element = document.getElementById(elementId);
-    element.innerHTML = `
-        <tr>
-            <td colspan="6" style="text-align: center; padding: 40px; color: var(--danger-color);">
-                <i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; margin-bottom: 10px;"></i>
-                <div>${message}</div>
-                <button class="btn btn-outline" onclick="loadCodesData()" style="margin-top: 15px;">
-                    <i class="fa-solid fa-rotate"></i> 重试
-                </button>
-            </td>
-        </tr>
-    `;
-}
 
         // 更新使用情况表格
-        // 添加这个缺失的函数 - 更新邀请码表格
-function updateCodesTable(codes) {
-    const tbody = document.getElementById('codes-table-body');
+        function updateUsageTable(usageData) {
+            const tbody = document.getElementById('usage-table-body');
 
-    if (!codes || codes.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
-                    <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>
-                    暂无邀请码数据
-                </td>
-            </tr>
-        `;
-        return;
-    }
+            if (!usageData || usageData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
+                            <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>
+                            暂无使用数据
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
 
-    tbody.innerHTML = codes.map(code => `
-        <tr>
-            <td>${code.code || 'N/A'}</td>
-            <td>${code.created_at ? new Date(code.created_at).toLocaleString() : '未知'}</td>
-            <td>${code.expires_at ? new Date(code.expires_at).toLocaleString() : '永久'}</td>
-            <td>
-                <span class="status-badge ${getCodeStatusClass(code)}">
-                    ${getCodeStatusText(code)}
-                </span>
-            </td>
-            <td>${calculateRemainingDays(code.expires_at)}</td>
-            <td>
-                <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
-                        onclick="editCode('${code.code}')" title="编辑">
-                    <i class="fa-solid fa-edit"></i>
-                </button>
-                <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
-                        onclick="deleteCode('${code.code}')" title="删除">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
+            tbody.innerHTML = usageData.map(item => `
+                <tr>
+                    <td>${item.code || 'N/A'}</td>
+                    <td>${item.created_at ? new Date(item.created_at).toLocaleString() : '未知'}</td>
+                    <td>${item.expires_at ? new Date(item.expires_at).toLocaleString() : '永久'}</td>
+                    <td><span class="status-badge ${getStatusClass(item)}">${getStatusText(item)}</span></td>
+                    <td>${item.current_uses || 0}</td>
+                    <td>
+                        <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
+                                onclick="viewUsageDetails('${item.code}')" title="查看详情">
+                            <i class="fa-solid fa-eye"></i> 查看
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
 
-// 计算剩余天数
-function calculateRemainingDays(expiresAt) {
-    if (!expiresAt) return '永久';
-    const now = new Date();
-    const expireDate = new Date(expiresAt);
-    const diffTime = expireDate - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        function viewUsageDetails(code) {
+            alert(`查看邀请码 ${code} 的使用详情 - 功能待实现`);
+        }
 
-    if (diffDays < 0) return '已过期';
-    return `${diffDays} 天`;
-}
+        // 加载邀请码列表
+        async function loadCodesData() {
+            try {
+                showLoading('codes-table-body');
 
-// 获取邀请码状态类名
-function getCodeStatusClass(code) {
-    if (!code.is_active) return 'status-expired';
-    if (code.expires_at && new Date(code.expires_at) < new Date()) return 'status-expired';
-    if (code.current_uses >= code.max_uses && code.max_uses > 0) return 'status-expired';
-    return 'status-active';
-}
+                const response = await fetch('/admin/codes', {
+                    credentials: 'include'
+                });
 
-// 获取邀请码状态文本
-function getCodeStatusText(code) {
-    if (!code.is_active) return '已禁用';
-    if (code.expires_at && new Date(code.expires_at) < new Date()) return '已过期';
-    if (code.current_uses >= code.max_uses && code.max_uses > 0) return '已用完';
-    return '有效';
-}
+                if (!response.ok) {
+                    throw new Error(`HTTP错误! 状态: ${response.status}`);
+                }
 
-// 编辑邀请码（示例函数）
-function editCode(code) {
-    alert(`编辑邀请码: ${code} - 功能待实现`);
-}
+                const data = await response.json();
 
-// 删除邀请码（示例函数）
-function deleteCode(code) {
-    if (confirm(`确定要删除邀请码 ${code} 吗？`)) {
-        alert(`删除邀请码: ${code} - 功能待实现`);
-    }
-}
+                if (data.success) {
+                    updateCodesTable(data.codes);
+                } else {
+                    throw new Error(data.message || '加载失败');
+                }
+            } catch (error) {
+                console.error('加载邀请码失败:', error);
+                showError('codes-table-body', '加载邀请码失败: ' + error.message);
+            }
+        }
+
+        // 显示加载状态
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px;">
+                        <div class="loader"></div>
+                        <div style="margin-top: 15px; color: rgba(255,255,255,0.7);">加载中...</div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // 显示错误信息
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px; color: var(--danger-color);">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; margin-bottom: 10px;"></i>
+                        <div>${message}</div>
+                        <button class="btn btn-outline" onclick="loadCodesData()" style="margin-top: 15px;">
+                            <i class="fa-solid fa-rotate"></i> 重试
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // 更新邀请码表格
+        function updateCodesTable(codes) {
+            const tbody = document.getElementById('codes-table-body');
+
+            if (!codes || codes.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">
+                            <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 15px; display: block;"></i>
+                            暂无邀请码数据
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = codes.map(code => `
+                <tr>
+                    <td>${code.code || 'N/A'}</td>
+                    <td>${code.created_at ? new Date(code.created_at).toLocaleString() : '未知'}</td>
+                    <td>${code.expires_at ? new Date(code.expires_at).toLocaleString() : '永久'}</td>
+                    <td>
+                        <span class="status-badge ${getCodeStatusClass(code)}">
+                            ${getCodeStatusText(code)}
+                        </span>
+                    </td>
+                    <td>${calculateRemainingDays(code.expires_at)}</td>
+                    <td>
+                        <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
+                                onclick="editCode('${code.code}')" title="编辑">
+                            <i class="fa-solid fa-edit"></i>
+                        </button>
+                        <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
+                                onclick="deleteCode('${code.code}')" title="删除">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 计算剩余天数
+        function calculateRemainingDays(expiresAt) {
+            if (!expiresAt) return '永久';
+            const now = new Date();
+            const expireDate = new Date(expiresAt);
+            const diffTime = expireDate - now;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) return '已过期';
+            return `${diffDays} 天`;
+        }
+
+        // 获取邀请码状态类名
+        function getCodeStatusClass(code) {
+            if (!code.is_active) return 'status-expired';
+            if (code.expires_at && new Date(code.expires_at) < new Date()) return 'status-expired';
+            if (code.current_uses >= code.max_uses && code.max_uses > 0) return 'status-expired';
+            return 'status-active';
+        }
+
+        // 获取邀请码状态文本
+        function getCodeStatusText(code) {
+            if (!code.is_active) return '已禁用';
+            if (code.expires_at && new Date(code.expires_at) < new Date()) return '已过期';
+            if (code.current_uses >= code.max_uses && code.max_uses > 0) return '已用完';
+            return '有效';
+        }
+
+        // 编辑邀请码（示例函数）
+        function editCode(code) {
+            alert(`编辑邀请码: ${code} - 功能待实现`);
+        }
+
+        // 删除邀请码（示例函数）
+        function deleteCode(code) {
+            if (confirm(`确定要删除邀请码 ${code} 吗？`)) {
+                alert(`删除邀请码: ${code} - 功能待实现`);
+            }
+        }
 
         // 工具函数
         function getStatusClass(item) {

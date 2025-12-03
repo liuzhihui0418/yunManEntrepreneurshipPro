@@ -8,7 +8,7 @@ import uuid
 class DatabaseManager:
     def __init__(self):
         self.db_config = {
-            'host': '127.0.0.1',
+            'host': '43.135.26.58',
             'port': 3306,
             'user': 'root',
             'password': 'Aini7758258!!',

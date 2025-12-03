@@ -1,5 +1,4 @@
 import threading
-
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect
 from flask_cors import CORS
 import os
@@ -121,7 +120,7 @@ def get_codes_list():
     return jsonify({'success': True, 'codes': codes})
 
 
-# --- 【核心修复部分】 ---
+# --- 单个创建邀请码 ---
 @app.route('/admin/codes', methods=['POST'])
 def create_code():
     data = request.get_json()
@@ -135,11 +134,9 @@ def create_code():
     # 1. 【极速响应】直接写入 Redis
     try:
         redis_manager.add_single_code(code, expires_days)
-
-        # 【新增】同时清除 "仪表盘" 和 "列表" 的缓存
+        # 清除缓存
         redis_manager.r.delete("admin:dashboard_stats")
-        redis_manager.r.delete("admin:codes_list")  # <--- 加了这一行
-
+        redis_manager.r.delete("admin:codes_list")
     except Exception as e:
         return jsonify({'success': False, 'message': f'Redis写入失败: {e}'})
 
@@ -153,6 +150,59 @@ def create_code():
     t.start()
 
     return jsonify({'success': True, 'message': '创建成功 (后台同步中)'})
+
+
+# --- 批量创建邀请码 ---
+@app.route('/admin/codes/batch', methods=['POST'])
+def create_batch_codes():
+    data = request.get_json()
+    count = data.get('count', 1)
+    prefix = data.get('prefix', '')
+    expires_days = int(data.get('expires_days', 7))
+    note = data.get('note', '')
+
+    # 验证数量
+    if count < 1 or count > 50:
+        return jsonify({'success': False, 'message': '创建数量必须在1-50之间'}), 400
+
+    created_codes = []
+
+    try:
+        # 批量创建邀请码
+        for i in range(count):
+            if prefix:
+                # 使用前缀+随机后缀
+                random_suffix = str(uuid.uuid4())[:8].upper()
+                code = f"{prefix}_{random_suffix}"
+            else:
+                # 完全随机生成
+                code = str(uuid.uuid4())[:8].upper()
+
+            # 1. 极速写入 Redis
+            redis_manager.add_single_code(code, expires_days)
+            created_codes.append(code)
+
+            # 2. 异步写入 MySQL
+            def background_write_mysql(c, d, n):
+                db_manager.create_invite_code(c, d, n)
+
+            t = threading.Thread(target=background_write_mysql, args=(code, expires_days, note))
+            t.start()
+
+        # 清除缓存
+        redis_manager.r.delete("admin:dashboard_stats")
+        redis_manager.r.delete("admin:codes_list")
+
+        return jsonify({
+            'success': True,
+            'message': f'成功创建 {len(created_codes)} 个邀请码',
+            'created_count': len(created_codes),
+            'codes': created_codes
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'创建失败: {e}'}), 500
+
 
 if __name__ == '__main__':
     # 启动时预热一次即可
