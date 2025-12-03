@@ -10,7 +10,7 @@ class RedisManager:
         # 初始化 Redis 连接池
         self.pool = redis.ConnectionPool(host='127.0.0.1', port=6379, decode_responses=True, max_connections=2000)
         self.r = redis.Redis(connection_pool=self.pool)
-        self.session_ttl = 86400  # Session 过期时间 24小时
+        self.session_ttl = 86400  # Session 过期时间 24小时ok
 
     def sync_mysql_to_redis(self):
         """
