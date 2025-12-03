@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>后台管理系统 - YunManGongFangAI</title>
+    <title>YunManGongFangAI</title>
     <link rel="icon" href="https://cdn.yunbaoymgf.chat/logo.png" type="image/png">
     <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -383,6 +383,78 @@
             0% {transform: rotate(0deg);}
             100% {transform: rotate(360deg);}
         }
+
+        /* 分页样式 */
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .pagination-info {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .page-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--glass-border);
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--primary-color);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-numbers {
+            display: flex;
+            gap: 5px;
+        }
+
+        .page-number {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .page-number:hover, .page-number.active {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-color: var(--primary-color);
+        }
+
+        .page-input {
+            width: 60px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: #fff;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -395,7 +467,7 @@
         <div class="sidebar">
             <div class="admin-logo">
                 <i class="fa-solid fa-robot"></i>
-                <span>后台管理系统</span>
+                <span>YunManGongFangAI</span>
             </div>
 
             <div class="nav-menu">
@@ -502,6 +574,32 @@
                             <!-- 动态加载数据 -->
                         </tbody>
                     </table>
+                    <!-- 分页控件 -->
+                    <div class="pagination" id="usage-pagination">
+                        <div class="pagination-info" id="usage-page-info">第 1 页，共 1 页</div>
+                        <div class="pagination-controls">
+                            <button class="page-btn" onclick="changeUsagePage('first')" disabled>
+                                <i class="fa-solid fa-angles-left"></i>
+                            </button>
+                            <button class="page-btn" onclick="changeUsagePage('prev')" disabled>
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+
+                            <div class="page-numbers" id="usage-page-numbers">
+                                <span class="page-number active">1</span>
+                            </div>
+
+                            <button class="page-btn" onclick="changeUsagePage('next')" disabled>
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                            <button class="page-btn" onclick="changeUsagePage('last')" disabled>
+                                <i class="fa-solid fa-angles-right"></i>
+                            </button>
+
+                            <input type="number" class="page-input" id="usage-page-input" min="1" value="1"
+                                   onchange="goToUsagePage(this.value)" placeholder="页码">
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -523,8 +621,9 @@
                     <div class="table-header">
                         <h3>邀请码列表</h3>
                         <div class="table-actions">
-                            <input type="text" class="form-input" placeholder="搜索邀请码..." style="width: 200px;">
-                            <button class="btn btn-outline">
+                            <input type="text" class="form-input" id="codes-search-input"
+                                   placeholder="搜索邀请码..." style="width: 200px;" oninput="searchCodes()">
+                            <button class="btn btn-outline" onclick="filterCodes()">
                                 <i class="fa-solid fa-filter"></i>筛选
                             </button>
                         </div>
@@ -544,6 +643,32 @@
                             <!-- 动态加载数据 -->
                         </tbody>
                     </table>
+                    <!-- 分页控件 -->
+                    <div class="pagination" id="codes-pagination">
+                        <div class="pagination-info" id="codes-page-info">第 1 页，共 1 页</div>
+                        <div class="pagination-controls">
+                            <button class="page-btn" onclick="changeCodesPage('first')" disabled>
+                                <i class="fa-solid fa-angles-left"></i>
+                            </button>
+                            <button class="page-btn" onclick="changeCodesPage('prev')" disabled>
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </button>
+
+                            <div class="page-numbers" id="codes-page-numbers">
+                                <span class="page-number active">1</span>
+                            </div>
+
+                            <button class="page-btn" onclick="changeCodesPage('next')" disabled>
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                            <button class="page-btn" onclick="changeCodesPage('last')" disabled>
+                                <i class="fa-solid fa-angles-right"></i>
+                            </button>
+
+                            <input type="number" class="page-input" id="codes-page-input" min="1" value="1"
+                                   onchange="goToCodesPage(this.value)" placeholder="页码">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -587,7 +712,7 @@
 
     <script>
         /**
-         * 1. 动态粒子背景特效 (与前台相同)
+         * 1. 动态粒子背景特效
          */
         const canvas = document.getElementById('bgCanvas');
         const ctx = canvas.getContext('2d');
@@ -709,8 +834,27 @@
         initParticles();
 
         /**
-         * 2. 后台管理功能
+         * 2. 后台管理功能 - 使用真实API数据
          */
+        // 分页相关变量
+        const paginationConfig = {
+            pageSize: 20, // 每页显示20行
+            usage: {
+                currentPage: 1,
+                totalPages: 1,
+                totalItems: 0,
+                data: []
+            },
+            codes: {
+                currentPage: 1,
+                totalPages: 1,
+                totalItems: 0,
+                data: [],
+                searchTerm: '',
+                filteredData: []
+            }
+        };
+
         // 标签页切换
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', function(e) {
@@ -767,9 +911,13 @@
             createBtn.disabled = true;
 
             try {
+                // 使用真实API调用
                 const response = await fetch('/admin/codes/batch', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
                     body: JSON.stringify({
                         count: createCount,
                         prefix: codePrefix || undefined,
@@ -785,7 +933,7 @@
                     this.reset();
                     document.getElementById('createCount').value = 1; // 重置数量
                     showNotification(`成功创建 ${result.created_count} 个邀请码`, 'success');
-                    loadCodesData();
+                    loadCodesData(); // 重新加载数据
                 } else {
                     showNotification(result.message || '创建失败', 'error');
                 }
@@ -805,36 +953,54 @@
             if (value > 50) this.value = 50;
         });
 
-        // 加载数据看板
-        async function loadDashboardData() {
-            try {
-                // 先显示局部 Loading，而不是让数字一直为 0
-                document.getElementById('total-codes').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
-                const response = await fetch('/admin/api/dashboard', {
-                    credentials: 'include'
-                });
+        // 加载数据看板 - 使用真实API
+       // 在loadDashboardData函数中，将URL改为正确的路径
+async function loadDashboardData() {
+    try {
+        // 显示加载状态
+        document.getElementById('total-codes').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
+        document.getElementById('active-users').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
+        document.getElementById('today-usage').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
+        document.getElementById('expiring-codes').innerHTML = '<i class="fa fa-spinner fa-spin" style="font-size:16px"></i>';
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+        // 使用真实API调用 - 修复URL路径
+        const response = await fetch('/admin/api/dashboard/paginated?page=1&page_size=20', {
+            credentials: 'include'
+        });
 
-                const data = await response.json();
-                console.log('Dashboard data:', data);
-
-                if (data.success) {
-                    document.getElementById('total-codes').textContent = data.stats.total_codes;
-                    document.getElementById('active-users').textContent = data.stats.active_users;
-                    document.getElementById('today-usage').textContent = data.stats.today_usage;
-                    document.getElementById('expiring-codes').textContent = data.stats.expiring_codes;
-
-                    // 更新使用情况表格
-                    updateUsageTable(data.usage_data);
-                }
-            } catch (error) {
-                console.error('加载数据失败:', error);
-                showNotification('加载数据失败: ' + error.message, 'error');
-            }
+        if (!response.ok) {
+            throw new Error(`HTTP错误! 状态: ${response.status}`);
         }
+
+        const data = await response.json();
+        console.log('真实仪表板数据:', data);
+
+        if (data.success) {
+            // 更新统计卡片
+            document.getElementById('total-codes').textContent = data.stats.total_codes;
+            document.getElementById('active-users').textContent = data.stats.active_users;
+            document.getElementById('today-usage').textContent = data.stats.today_usage;
+            document.getElementById('expiring-codes').textContent = data.stats.expiring_codes;
+
+            // 更新分页数据
+            paginationConfig.usage.data = data.usage_data || [];
+            paginationConfig.usage.totalItems = data.pagination.total_items;
+            paginationConfig.usage.totalPages = data.pagination.total_pages;
+            paginationConfig.usage.currentPage = data.pagination.current_page;
+
+            displayUsagePageData();
+        }
+    } catch (error) {
+        console.error('加载数据失败:', error);
+        showNotification('加载数据失败: ' + error.message, 'error');
+
+        // 出错时显示0而不是保持加载状态
+        document.getElementById('total-codes').textContent = '0';
+        document.getElementById('active-users').textContent = '0';
+        document.getElementById('today-usage').textContent = '0';
+        document.getElementById('expiring-codes').textContent = '0';
+    }
+}
 
         // 更新使用情况表格
         function updateUsageTable(usageData) {
@@ -873,12 +1039,13 @@
             alert(`查看邀请码 ${code} 的使用详情 - 功能待实现`);
         }
 
-        // 加载邀请码列表
+        // 加载邀请码列表 - 使用真实API
         async function loadCodesData() {
             try {
                 showLoading('codes-table-body');
 
-                const response = await fetch('/admin/codes', {
+                // 使用真实API调用
+                const response = await fetch('/admin/codes/paginated?page=1&page_size=20', {
                     credentials: 'include'
                 });
 
@@ -889,7 +1056,17 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    updateCodesTable(data.codes);
+                    // 更新分页数据
+                    paginationConfig.codes.data = data.codes || [];
+                    paginationConfig.codes.totalItems = data.pagination.total_items;
+                    paginationConfig.codes.totalPages = data.pagination.total_pages;
+                    paginationConfig.codes.currentPage = data.pagination.current_page;
+                    paginationConfig.codes.searchTerm = '';
+
+                    displayCodesPageData();
+
+                    // 显示真实数据量
+                    console.log(`从数据库加载了 ${data.codes.length} 条记录，总计 ${data.pagination.total_items} 条`);
                 } else {
                     throw new Error(data.message || '加载失败');
                 }
@@ -969,6 +1146,245 @@
             `).join('');
         }
 
+        // 分页相关函数
+        function updateUsagePagination() {
+            const pagination = paginationConfig.usage;
+            const infoEl = document.getElementById('usage-page-info');
+            const numbersEl = document.getElementById('usage-page-numbers');
+            const prevBtn = document.querySelector('#usage-pagination .page-btn:nth-child(2)');
+            const nextBtn = document.querySelector('#usage-pagination .page-btn:nth-child(4)');
+            const firstBtn = document.querySelector('#usage-pagination .page-btn:nth-child(1)');
+            const lastBtn = document.querySelector('#usage-pagination .page-btn:nth-child(5)');
+            const pageInput = document.getElementById('usage-page-input');
+
+            // 更新信息
+            infoEl.textContent = `第 ${pagination.currentPage} 页，共 ${pagination.totalPages} 页，总计 ${pagination.totalItems} 条`;
+
+            // 更新页码输入框
+            pageInput.value = pagination.currentPage;
+            pageInput.max = pagination.totalPages;
+
+            // 更新按钮状态
+            firstBtn.disabled = pagination.currentPage === 1;
+            prevBtn.disabled = pagination.currentPage === 1;
+            nextBtn.disabled = pagination.currentPage === pagination.totalPages;
+            lastBtn.disabled = pagination.currentPage === pagination.totalPages;
+
+            // 更新页码显示
+            numbersEl.innerHTML = '';
+            const startPage = Math.max(1, pagination.currentPage - 2);
+            const endPage = Math.min(pagination.totalPages, startPage + 4);
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageEl = document.createElement('span');
+                pageEl.className = `page-number ${i === pagination.currentPage ? 'active' : ''}`;
+                pageEl.textContent = i;
+                pageEl.onclick = () => goToUsagePage(i);
+                numbersEl.appendChild(pageEl);
+            }
+        }
+
+        function updateCodesPagination() {
+            const pagination = paginationConfig.codes;
+            const infoEl = document.getElementById('codes-page-info');
+            const numbersEl = document.getElementById('codes-page-numbers');
+            const prevBtn = document.querySelector('#codes-pagination .page-btn:nth-child(2)');
+            const nextBtn = document.querySelector('#codes-pagination .page-btn:nth-child(4)');
+            const firstBtn = document.querySelector('#codes-pagination .page-btn:nth-child(1)');
+            const lastBtn = document.querySelector('#codes-pagination .page-btn:nth-child(5)');
+            const pageInput = document.getElementById('codes-page-input');
+
+            // 更新信息
+            infoEl.textContent = `第 ${pagination.currentPage} 页，共 ${pagination.totalPages} 页，总计 ${pagination.totalItems} 条`;
+
+            // 更新页码输入框
+            pageInput.value = pagination.currentPage;
+            pageInput.max = pagination.totalPages;
+
+            // 更新按钮状态
+            firstBtn.disabled = pagination.currentPage === 1;
+            prevBtn.disabled = pagination.currentPage === 1;
+            nextBtn.disabled = pagination.currentPage === pagination.totalPages;
+            lastBtn.disabled = pagination.currentPage === pagination.totalPages;
+
+            // 更新页码显示
+            numbersEl.innerHTML = '';
+            const startPage = Math.max(1, pagination.currentPage - 2);
+            const endPage = Math.min(pagination.totalPages, startPage + 4);
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageEl = document.createElement('span');
+                pageEl.className = `page-number ${i === pagination.currentPage ? 'active' : ''}`;
+                pageEl.textContent = i;
+                pageEl.onclick = () => goToCodesPage(i);
+                numbersEl.appendChild(pageEl);
+            }
+        }
+
+        // 分页导航函数 - 使用真实API
+        async function changeUsagePage(action) {
+            const pagination = paginationConfig.usage;
+
+            switch(action) {
+                case 'first': pagination.currentPage = 1; break;
+                case 'prev': pagination.currentPage = Math.max(1, pagination.currentPage - 1); break;
+                case 'next': pagination.currentPage = Math.min(pagination.totalPages, pagination.currentPage + 1); break;
+                case 'last': pagination.currentPage = pagination.totalPages; break;
+            }
+
+            await displayUsagePageData();
+        }
+
+        async function changeCodesPage(action) {
+            const pagination = paginationConfig.codes;
+
+            switch(action) {
+                case 'first': pagination.currentPage = 1; break;
+                case 'prev': pagination.currentPage = Math.max(1, pagination.currentPage - 1); break;
+                case 'next': pagination.currentPage = Math.min(pagination.totalPages, pagination.currentPage + 1); break;
+                case 'last': pagination.currentPage = pagination.totalPages; break;
+            }
+
+            await displayCodesPageData();
+        }
+
+        async function goToUsagePage(page) {
+            const pagination = paginationConfig.usage;
+            page = parseInt(page);
+            if (page >= 1 && page <= pagination.totalPages) {
+                pagination.currentPage = page;
+                await displayUsagePageData();
+            }
+        }
+
+        async function goToCodesPage(page) {
+            const pagination = paginationConfig.codes;
+            page = parseInt(page);
+            if (page >= 1 && page <= pagination.totalPages) {
+                pagination.currentPage = page;
+                await displayCodesPageData();
+            }
+        }
+
+        // 显示当前页数据 - 使用真实API
+        async function displayUsagePageData() {
+            const pagination = paginationConfig.usage;
+
+            try {
+                // 从API获取当前页数据
+                const response = await fetch(`/admin/api/dashboard/paginated?page=${pagination.currentPage}&page_size=${paginationConfig.pageSize}`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const pageData = data.usage_data || [];
+                        updateUsageTable(pageData);
+                        updateUsagePagination();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('加载分页数据失败:', error);
+            }
+
+            // 如果API调用失败，使用本地数据回退
+            const startIndex = (pagination.currentPage - 1) * paginationConfig.pageSize;
+            const endIndex = startIndex + paginationConfig.pageSize;
+            const pageData = pagination.data.slice(startIndex, endIndex);
+
+            updateUsageTable(pageData);
+            updateUsagePagination();
+        }
+
+        async function displayCodesPageData() {
+            const pagination = paginationConfig.codes;
+            const searchParam = pagination.searchTerm ? `&search=${encodeURIComponent(pagination.searchTerm)}` : '';
+
+            try {
+                // 从API获取当前页数据
+                const response = await fetch(`/admin/codes/paginated?page=${pagination.currentPage}&page_size=${paginationConfig.pageSize}${searchParam}`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const pageData = data.codes || [];
+                        updateCodesTable(pageData);
+
+                        // 更新分页信息
+                        pagination.totalItems = data.pagination.total_items;
+                        pagination.totalPages = data.pagination.total_pages;
+
+                        updateCodesPagination();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('加载分页数据失败:', error);
+            }
+
+            // 如果API调用失败，使用本地数据回退
+            const dataToUse = pagination.searchTerm ? pagination.filteredData : pagination.data;
+            const startIndex = (pagination.currentPage - 1) * paginationConfig.pageSize;
+            const endIndex = startIndex + paginationConfig.pageSize;
+            const pageData = dataToUse.slice(startIndex, endIndex);
+
+            updateCodesTable(pageData);
+            updateCodesPagination();
+        }
+
+        // 搜索和筛选功能 - 使用真实API
+        async function searchCodes() {
+            const searchTerm = document.getElementById('codes-search-input').value.trim();
+            const pagination = paginationConfig.codes;
+
+            pagination.searchTerm = searchTerm;
+            pagination.currentPage = 1;
+
+            try {
+                const response = await fetch(`/admin/codes/paginated?page=1&page_size=${paginationConfig.pageSize}&search=${encodeURIComponent(searchTerm)}`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        pagination.filteredData = data.codes || [];
+                        pagination.totalItems = data.pagination.total_items;
+                        pagination.totalPages = data.pagination.total_pages;
+
+                        updateCodesTable(pagination.filteredData);
+                        updateCodesPagination();
+                        return;
+                    }
+                }
+            } catch (error) {
+                console.error('搜索失败:', error);
+            }
+
+            // API失败时的本地搜索
+            if (searchTerm) {
+                pagination.filteredData = pagination.data.filter(code =>
+                    code.code.toLowerCase().includes(searchTerm.toLowerCase())
+                );
+                pagination.totalItems = pagination.filteredData.length;
+            } else {
+                pagination.totalItems = pagination.data.length;
+            }
+
+            pagination.totalPages = Math.ceil(pagination.totalItems / paginationConfig.pageSize);
+            updateCodesTable(pagination.searchTerm ? pagination.filteredData : pagination.data);
+            updateCodesPagination();
+        }
+
+        function filterCodes() {
+            // 这里可以添加更复杂的筛选逻辑
+            alert('高级筛选功能待实现');
+        }
+
         // 计算剩余天数
         function calculateRemainingDays(expiresAt) {
             if (!expiresAt) return '永久';
@@ -997,18 +1413,6 @@
             return '有效';
         }
 
-        // 编辑邀请码（示例函数）
-        function editCode(code) {
-            alert(`编辑邀请码: ${code} - 功能待实现`);
-        }
-
-        // 删除邀请码（示例函数）
-        function deleteCode(code) {
-            if (confirm(`确定要删除邀请码 ${code} 吗？`)) {
-                alert(`删除邀请码: ${code} - 功能待实现`);
-            }
-        }
-
         // 工具函数
         function getStatusClass(item) {
             if (!item.is_active) return 'status-expired';
@@ -1020,6 +1424,18 @@
             if (!item.is_active) return '已失效';
             if (item.expires_at && new Date(item.expires_at) < new Date()) return '已过期';
             return '有效';
+        }
+
+        // 编辑邀请码（示例函数）
+        function editCode(code) {
+            alert(`编辑邀请码: ${code} - 功能待实现`);
+        }
+
+        // 删除邀请码（示例函数）
+        function deleteCode(code) {
+            if (confirm(`确定要删除邀请码 ${code} 吗？`)) {
+                alert(`删除邀请码: ${code} - 功能待实现`);
+            }
         }
 
         function showNotification(message, type = 'info') {
@@ -1035,6 +1451,9 @@
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             loadDashboardData();
+            // 初始化分页显示
+            updateUsagePagination();
+            updateCodesPagination();
         });
     </script>
 </body>
