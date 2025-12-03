@@ -8,7 +8,6 @@ from db.database import db_manager
 class RedisManager:
     def __init__(self):
         # 初始化 Redis 连接池
-        # 如果是本机 Windows Redis，不需要改 IP
         self.pool = redis.ConnectionPool(host='127.0.0.1', port=6379, decode_responses=True, max_connections=2000)
         self.r = redis.Redis(connection_pool=self.pool)
         self.session_ttl = 86400  # Session 过期时间 24小时
@@ -36,11 +35,7 @@ class RedisManager:
                     "curr": item['current_uses']
                 }
 
-                # 【修改点】针对 Windows Redis 3.0 版本，必须使用 hmset
-                # 原代码: pipeline.hset(key, mapping=data) -> 报错
-                # 新代码: pipeline.hmset(key, data) -> 兼容旧版 Redis
                 pipeline.hmset(key, data)
-
                 count += 1
 
             pipeline.execute()
@@ -50,7 +45,7 @@ class RedisManager:
 
     def validate_and_use_code(self, code):
         """
-        【极速验证】直接在 Redis 内存中操作，原子扣减
+        【修复版】极速验证 - 同一个邀请码可多次使用
         """
         key = f"invite:{code}"
 
@@ -58,41 +53,46 @@ class RedisManager:
         if not self.r.exists(key):
             return {'valid': False, 'message': '邀请码不存在'}
 
-        # 2. 获取状态 (Lua 脚本保证原子性)
+        # 2. 【修复】移除 is_used 检查的 Lua 脚本
         lua_script = """
         local key = KEYS[1]
         local active = tonumber(redis.call('HGET', key, 'active'))
-        local is_used = tonumber(redis.call('HGET', key, 'is_used'))
         local max_uses = tonumber(redis.call('HGET', key, 'max'))
         local curr_uses = tonumber(redis.call('HGET', key, 'curr'))
 
-        if active ~= 1 then return -1 end -- 失效
-        if is_used == 1 then return -2 end -- 已被标记使用
+        -- 只检查是否激活，不再检查 is_used
+        if active ~= 1 then return -1 end
 
         if max_uses > 0 then
-            if curr_uses >= max_uses then return -3 end -- 次数已满
+            -- 只根据使用次数判断
+            if curr_uses >= max_uses then return -3 end
             redis.call('HINCRBY', key, 'curr', 1)
+            -- 只有达到最大次数时才标记为已使用
             if curr_uses + 1 >= max_uses then
-                redis.call('HSET', key, 'is_used', 1) -- Redis 3.0 HSET支持单个字段，这里没问题
+                redis.call('HSET', key, 'is_used', 1)
             end
         else
+            -- 无限次使用的邀请码
             redis.call('HINCRBY', key, 'curr', 1)
         end
 
         return 1
         """
-        cmd = self.r.register_script(lua_script)
-        result = cmd(keys=[key])
 
-        if result == 1:
-            return {'valid': True, 'message': '验证成功'}
-        elif result == -1:
-            return {'valid': False, 'message': '邀请码已失效'}
-        elif result == -2:
-            return {'valid': False, 'message': '邀请码已被使用'}
-        elif result == -3:
-            return {'valid': False, 'message': '邀请码次数已耗尽'}
-        else:
+        try:
+            cmd = self.r.register_script(lua_script)
+            result = cmd(keys=[key])
+
+            if result == 1:
+                return {'valid': True, 'message': '验证成功'}
+            elif result == -1:
+                return {'valid': False, 'message': '邀请码已失效'}
+            elif result == -3:  # 现在这个判断才会真正执行到
+                return {'valid': False, 'message': '邀请码次数已耗尽'}
+            else:
+                return {'valid': False, 'message': '系统繁忙'}
+        except Exception as e:
+            print(f"Redis脚本执行错误: {e}")
             return {'valid': False, 'message': '系统繁忙'}
 
     # --- Session 管理 ---
