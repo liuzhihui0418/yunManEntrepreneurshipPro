@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YunManGongFangAI - 智能体控制台</title>
+    <link rel="icon" href="https://cdn.yunbaoymgf.chat/logo.png" type="image/png">
+    <!-- 引入字体图标 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* ================= 全局重置 ================= */
+        :root {
+            --primary-color: #8b5cf6;
+            --secondary-color: #3b82f6;
+            --bg-color: #050505;
+            --text-color: #ffffff;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ================= 动态背景 Canvas ================= */
+        #bgCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* ================= 顶部导航栏 (Logo + 引流) ================= */
+        .navbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        /* 左上角 Logo */
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .nav-logo i {
+            font-size: 28px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-logo span {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+
+        /* 右上角 私域引流 */
+        .nav-socials {
+            display: flex;
+            gap: 20px;
+        }
+
+        .social-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .social-item:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        .social-item i {
+            font-size: 18px;
+        }
+
+        /* 悬停弹出二维码 */
+        .qr-popup {
+            position: absolute;
+            top: 120%;
+            right: 0;
+            width: 180px;
+            padding: 15px;
+            background: rgba(20, 20, 30, 0.95);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .qr-popup img {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .qr-popup p {
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        .social-item:hover .qr-popup {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        /* ================= 主体内容 (左右布局) ================= */
+        .main-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 50px;
+        }
+
+        /* 左侧介绍文字 */
+        .intro-section {
+            flex: 1;
+            padding-right: 80px;
+            animation: fadeInRx 1s ease-out;
+        }
+
+        .intro-tag {
+            display: inline-block;
+            padding: 6px 12px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 20px;
+            color: #a78bfa;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .intro-title {
+            font-size: 56px;
+            line-height: 1.1;
+            font-weight: 800;
+            margin-bottom: 25px;
+            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .intro-title span {
+            color: var(--primary-color);
+            -webkit-text-fill-color: var(--primary-color);
+        }
+
+        .intro-desc {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.6;
+            margin-bottom: 40px;
+            max-width: 600px;
+        }
+
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-item:hover {
+            background: rgba(139, 92, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .feature-item i {
+            color: #34d399;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* 右侧登录框 */
+        .login-wrapper {
+            width: 440px;
+            flex-shrink: 0;
+            animation: fadeInRx 1s ease-out 0.2s backwards;
+        }
+
+        /* 玻璃拟态卡片 */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #8b5cf6, #3b82f6, transparent);
+            animation: borderFlow 3s linear infinite;
+        }
+
+        @keyframes borderFlow {
+            0% { left: -100%; }
+            50% { left: 100%; }
+            100% { left: 100%; }
+        }
+
+        /* 表单样式 */
+        .form-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-header h2 { font-size: 24px; margin-bottom: 8px; }
+        .form-header p { font-size: 14px; color: rgba(255,255,255,0.5); }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 25px;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            transition: color 0.3s ease;
+        }
+
+        .custom-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px 15px 15px 45px;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .custom-input:focus {
+            background: rgba(0, 0, 0, 0.4);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+        }
+
+        .custom-input:focus + .input-icon { color: var(--primary-color); }
+
+        .error-msg {
+            position: absolute;
+            bottom: -20px;
+            left: 5px;
+            font-size: 12px;
+            color: #ef4444;
+            opacity: 0;
+            transform: translateY(-5px);
+            transition: all 0.3s;
+        }
+        .error-msg.show { opacity: 1; transform: translateY(0); }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.6);
+        }
+
+        /* 动画关键帧 */
+        @keyframes fadeInRx {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 响应式 */
+        @media (max-width: 968px) {
+            .navbar { padding: 20px; }
+            .main-container { flex-direction: column; justify-content: center; padding: 20px; }
+            .intro-section { display: none; } /* 移动端隐藏左侧介绍，专注登录 */
+            .login-wrapper { width: 100%; max-width: 400px; }
+            .nav-socials span { display: none; } /* 移动端隐藏文字只留图标 */
+        }
+
+        .loader {
+            display: none;
+            width: 20px; height: 20px;
+            border: 2px solid #fff; border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes rotation { 0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);} }
+    </style>
+</head>
+<body>
+    <!-- 动态背景 -->
+    <canvas id="bgCanvas"></canvas>
+
+    <!-- 顶部导航 -->
+    <nav class="navbar">
+        <a href="#" class="nav-logo">
+            <i class="fa-solid fa-robot"></i>
+            <span>YunManGongFangAI</span>
+        </a>
+        <div class="nav-socials">
+            <!-- 微信引流 -->
+            <a href="javascript:void(0)" class="social-item">
+                <i class="fa-brands fa-weixin" style="color: #07c160;"></i>
+                <span>微信助手</span>
+                <div class="qr-popup">
+                    <!-- 请把这里换成你的微信群二维码图片链接 -->
+                    <img src="https://cdn.yunbaoymgf.chat/weixin.png" alt="微信群">
+                    <p>扫码联系客服进微信群聊</p>
+                </div>
+            </a>
+            <!-- QQ引流 -->
+            <a href="javascript:void(0)" class="social-item">
+                <i class="fa-brands fa-qq" style="color: #3b82f6;"></i>
+                <span>变现链路</span>
+                <div class="qr-popup">
+                     <!-- 请把这里换成你的QQ群二维码图片链接 -->
+                    <img src="https://cdn.yunbaoymgf.chat/qq.png" alt="QQ群">
+                    <p>扫描加入QQ群</p>
+                </div>
+            </a>
+        </div>
+    </nav>
+
+    <!-- 主体内容 -->
+    <main class="main-container">
+        <!-- 左侧：项目介绍 -->
+        <div class="intro-section">
+            <div class="intro-tag">✨短视频内容整合自媒体AI创业平台</div>
+            <h1 class="intro-title">
+                构建属于你的<br>
+                <span>自媒体创业之路</span>
+            </h1>
+            <p class="intro-desc">
+                YunManGongFangAI 平台专为互联网创业者打造，深度布局六大核心赛道
+                短剧创作、漫剧制作、推文动态漫开发、简笔画、TK、影视综内容生产
+                智能体AI应用创新，为创作者提供全链路赋能，变现链路的全新赋能！！！
+            </p>
+            <div class="feature-list">
+                <div class="feature-item"><i class="fa-solid fa-robot"></i>短剧漫剧智能剪辑</div>
+                <div class="feature-item"><i class="fa-solid fa-brain"></i>动态漫Sora2一键成片</div>
+                <div class="feature-item"><i class="fa-solid fa-bolt"></i>AI最前沿技术更迭</div>
+                <div class="feature-item"><i class="fa-solid fa-wand-magic-sparkles"></i>智能体AI应用和创新</div>
+                <!-- 新增的两个功能项 -->
+                <div class="feature-item"><i class="fa-solid fa-palette"></i>简笔画智能创作</div>
+                <div class="feature-item"><i class="fa-solid fa-globe"></i>TK国际化内容生产</div>
+            </div>
+        </div>
+
+        <!-- 右侧：登录框 -->
+        <div class="login-wrapper">
+            <div class="glass-card">
+                <div class="form-header">
+                    <h2>YunManGongFangAI</h2>
+                    <p>云漫工坊短视频资源整合平台</p>
+                </div>
+
+                <form id="loginForm">
+                    <div class="input-group">
+                        <i class="fa-solid fa-key input-icon"></i>
+                        <input
+                            type="text"
+                            id="inviteCode"
+                            class="custom-input"
+                            placeholder="请输入您的专属邀请码"
+                            autocomplete="off"
+                        >
+                        <div id="errorTip" class="error-msg">请输入有效的邀请码</div>
+                    </div>
+
+                    <button type="submit" id="submitBtn" class="submit-btn">
+                        <span id="btnText" class="btn-text">立即登录</span>
+                        <span id="btnLoader" class="loader" style="display: none;"></span>
+                    </button>
+                </form>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="#" style="color: rgba(255,255,255,0.3); font-size: 12px; text-decoration: none;">邀请码请扫码进群获取，每天20个免费邀请码</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /**
+         * 1. 炸裂粒子特效 (增强版)
+         * 增加鼠标交互，粒子会像神经网络一样被鼠标吸引
+         */
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+
+        // 鼠标位置
+        let mouse = { x: null, y: null, radius: 200 };
+
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = event.x;
+            mouse.y = event.y;
+        });
+
+        window.addEventListener('mouseout', () => {
+             mouse.x = null;
+             mouse.y = null;
+        });
+
+        const properties = {
+            bgColor: 'rgba(5, 5, 5, 1)',
+            particleColor: 'rgba(139, 92, 246, 0.8)',
+            particleRadius: 2,
+            particleCount: 150, // 增加粒子数量
+            particleVelocity: 0.8, // 加快速度
+            lineLength: 120,
+        };
+
+        function initSize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        window.onresize = initSize;
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.velocityX = Math.random() * (properties.particleVelocity * 2) - properties.particleVelocity;
+                this.velocityY = Math.random() * (properties.particleVelocity * 2) - properties.particleVelocity;
+                this.size = Math.random() * 2 + 1;
+            }
+
+            position() {
+                // 边界反弹
+                if(this.x > width || this.x < 0) this.velocityX *= -1;
+                if(this.y > height || this.y < 0) this.velocityY *= -1;
+
+                // 鼠标交互：如果在鼠标半径内，受到轻微吸引（可选）或单纯作为连接点
+                // 这里为了简单且帅气，不改变物理轨迹，只改变连线逻辑
+
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+            }
+
+            reDraw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fillStyle = properties.particleColor;
+                ctx.fill();
+            }
+        }
+
+        function reDrawBackground() {
+            ctx.fillStyle = properties.bgColor;
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        function drawLines() {
+            let x1, y1, x2, y2, length, opacity;
+            for (let i in particles) {
+                // 粒子互相连线
+                for (let j in particles) {
+                    x1 = particles[i].x; y1 = particles[i].y;
+                    x2 = particles[j].x; y2 = particles[j].y;
+                    length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+
+                    if (length < properties.lineLength) {
+                        opacity = 1 - length / properties.lineLength;
+                        ctx.lineWidth = '0.5';
+                        ctx.strokeStyle = `rgba(139, 92, 246, ${opacity})`;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                        ctx.closePath();
+                    }
+                }
+
+                // 粒子与鼠标连线 (交互核心)
+                if (mouse.x != null) {
+                    let mouseDist = Math.sqrt(Math.pow(mouse.x - particles[i].x, 2) + Math.pow(mouse.y - particles[i].y, 2));
+                    if (mouseDist < mouse.radius) {
+                        ctx.lineWidth = '1';
+                        ctx.strokeStyle = `rgba(59, 130, 246, ${1 - mouseDist/mouse.radius})`; // 靠近鼠标变蓝色
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(mouse.x, mouse.y);
+                        ctx.stroke();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function loop() {
+            reDrawBackground();
+            for (let i in particles) {
+                particles[i].position();
+                particles[i].reDraw();
+            }
+            drawLines();
+            requestAnimationFrame(loop);
+        }
+
+        function initParticles() {
+            particles = [];
+            // 根据屏幕大小调整粒子数量
+            let count = window.innerWidth > 1000 ? 150 : 80;
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+            loop();
+        }
+
+        initSize();
+        initParticles();
+
+        /**
+         * 2. 登录逻辑 (保留你原有的逻辑，不做修改)
+         */
+        const loginForm = document.getElementById('loginForm');
+        const inviteCodeInput = document.getElementById('inviteCode');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const btnLoader = document.getElementById('btnLoader');
+        const errorTip = document.getElementById('errorTip');
+
+        // 后端地址
+        const API_BASE = 'http://localhost:5000'; // 请确保这里是你真实的后端地址
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const code = inviteCodeInput.value.trim();
+
+            if (!code || code.length < 4) {
+                showError('请输入正确的邀请码');
+                return;
+            }
+
+            hideError();
+            setLoading(true);
+
+            try {
+                // 真实的 Fetch 请求
+                const response = await fetch(`${API_BASE}/api/validate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ invite_code: code })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    btnText.innerText = "登录成功";
+                    submitBtn.style.background = "linear-gradient(135deg, #10b981 0%, #059669 100%)";
+                    document.cookie = `session_id=${result.session_id}; path=/; max-age=86400`;
+
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 800);
+                } else {
+                    showError(result.message || '邀请码无效，请重试');
+                    setLoading(false);
+                }
+
+            } catch (error) {
+                console.error('登录请求失败:', error);
+                // 为了演示效果，如果连接不上后端，这里会提示。
+                // 实际生产环境请保留这个错误提示
+                showError('网络连接失败，请检查服务器');
+                setLoading(false);
+            }
+        });
+
+        inviteCodeInput.addEventListener('focus', hideError);
+
+        function showError(msg) {
+            errorTip.textContent = msg;
+            errorTip.classList.add('show');
+            inviteCodeInput.style.borderColor = '#ef4444';
+        }
+
+        function hideError() {
+            errorTip.classList.remove('show');
+            inviteCodeInput.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        }
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                submitBtn.disabled = true;
+                btnText.style.display = 'none';
+                btnLoader.style.display = 'inline-block';
+                submitBtn.style.opacity = '0.8';
+                submitBtn.style.cursor = 'wait';
+            } else {
+                submitBtn.disabled = false;
+                btnText.style.display = 'inline';
+                btnLoader.style.display = 'none';
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+            }
+        }
+    </script>
+</body>
+</html>
