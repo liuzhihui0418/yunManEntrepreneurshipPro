@@ -188,7 +188,8 @@ def create_batch_codes():
 
             t = threading.Thread(target=background_write_mysql, args=(code, expires_days, note))
             t.start()
-
+        # [新增] 强制清除总数缓存，这样回到列表页时总数才会增加
+        redis_manager.r.delete("admin:total_codes_count")
         # 清除缓存
         redis_manager.r.delete("admin:dashboard_stats")
         redis_manager.r.delete("admin:codes_list")
@@ -202,6 +203,26 @@ def create_batch_codes():
 
     except Exception as e:
         return jsonify({'success': False, 'message': f'创建失败: {e}'}), 500
+
+
+# --- 分页接口 ---
+@app.route('/admin/api/dashboard/paginated', methods=['GET'])
+def get_paginated_dashboard():
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 20, type=int)
+
+    data = db_manager.get_dashboard_stats_with_pagination(page, page_size)
+    return jsonify({'success': True, **data})
+
+
+@app.route('/admin/codes/paginated', methods=['GET'])
+def get_paginated_codes():
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('page_size', 20, type=int)
+    search = request.args.get('search', '')
+
+    data = db_manager.get_codes_with_pagination(page, page_size, search)
+    return jsonify({'success': True, **data})
 
 
 if __name__ == '__main__':
