@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import pymysql  # 换成 MySQL 驱动
 from pymysql.cursors import DictCursor
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -76,8 +76,15 @@ def check_upstream_validity(api_key):
 
 
 # ================= 3. 核心验证接口 =================
+
+
+# ================= 核心验证接口 (升级版) =================
 @app.post("/verify")
 def verify_license(req: VerifyReq):
+    # key: 解密后的真实 API Key
+    # req.card_key: 这里客户端发来的其实是解密后的。
+    # 如果你想存原始加密串，客户端需要多发一个参数，或者我们暂且只存解密后的做唯一标识。
+
     key = req.card_key.strip()
     mid = req.machine_id.strip()
 
@@ -85,31 +92,62 @@ def verify_license(req: VerifyReq):
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # 1. 查库：是否绑定过？
-            sql = "SELECT machine_id FROM license_bindings WHERE card_key = %s"
+            # 1. 查库：这个卡密是否存在？
+            # 这里的 card_key 存的是解密后的 Key (如 sk-xxxx 或 y0Ekim...)
+            sql = "SELECT * FROM license_bindings WHERE card_key = %s"
             cursor.execute(sql, (key,))
             row = cursor.fetchone()
 
-            # === 情况 A: 库里有记录 (老用户) ===
+            # === 情况 A: 老用户 (库里有) ===
             if row:
                 bound_mid = row['machine_id']
-                if bound_mid == mid:
-                    return {"code": 200, "status": "success", "msg": "验证成功 (老设备)"}
-                else:
-                    return {"code": 403, "status": "fail", "msg": f"激活失败：该码已绑定其他设备 (尾号{bound_mid[-4:]})"}
+                db_expiry = row.get('expiry_date')  # 获取数据库里的过期时间
+                db_status = row.get('status')  # 获取状态 (active/banned)
 
-            # === 情况 B: 库里没记录 (新用户) ===
+                # 1.1 检查机器码
+                if bound_mid != mid:
+                    return {"code": 403, "status": "fail", "msg": f"该码已绑定其他设备(尾号{bound_mid[-4:]})"}
+
+                # 1.2 🔥🔥🔥 核心：检查是否被手动禁用 🔥🔥🔥
+                if db_status != 'active':
+                    return {"code": 403, "status": "fail", "msg": "该授权已被管理员禁用"}
+
+                # 1.3 🔥🔥🔥 核心：检查是否过期 🔥🔥🔥
+                if db_expiry and datetime.now() > db_expiry:
+                    return {"code": 403, "status": "fail", "msg": f"授权已于 {db_expiry} 过期，请续费"}
+
+                # 全部通过，告诉客户端最新的过期时间
+                return {
+                    "code": 200,
+                    "status": "success",
+                    "msg": "验证成功",
+                    "expiry_date": str(db_expiry)  # 把数据库的时间传回给客户端
+                }
+
+            # === 情况 B: 新用户 (首次激活) ===
             else:
-                # 2. 查上游
                 is_valid, reason = check_upstream_validity(key)
                 if not is_valid:
                     return {"code": 400, "status": "fail", "msg": reason}
 
-                # 3. 写入绑定
-                insert_sql = "INSERT INTO license_bindings (card_key, machine_id) VALUES (%s, %s)"
-                cursor.execute(insert_sql, (key, mid))
+                # 默认过期时间：当前时间 + 365天 (或者你定死 2099年)
+                # 你可以在这里控制新用户的默认时长
+                default_expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+
+                insert_sql = """
+                    INSERT INTO license_bindings 
+                    (card_key, machine_id, expiry_date, status) 
+                    VALUES (%s, %s, %s, 'active')
+                """
+                cursor.execute(insert_sql, (key, mid, default_expiry))
                 conn.commit()
-                return {"code": 200, "status": "success", "msg": "激活成功 (首次绑定)"}
+
+                return {
+                    "code": 200,
+                    "status": "success",
+                    "msg": "激活成功 (首次绑定)",
+                    "expiry_date": default_expiry
+                }
 
     except Exception as e:
         return {"code": 500, "status": "error", "msg": f"系统错误: {str(e)}"}
