@@ -26,7 +26,7 @@ YUNWU_URL = "https://yunwu.ai/v1/dashboard/billing/usage"
 class VerifyReq(BaseModel):
     card_key: str
     machine_id: str
-
+    raw_key: str = None  # 🔥 新增可选字段
 
 # ================= 2. 自动建表 (MySQL版) =================
 def init_db():
@@ -87,6 +87,7 @@ def verify_license(req: VerifyReq):
 
     key = req.card_key.strip()
     mid = req.machine_id.strip()
+    raw = req.raw_key  # 获取原始卡密
 
     conn = None
     try:
@@ -134,12 +135,13 @@ def verify_license(req: VerifyReq):
                 # 你可以在这里控制新用户的默认时长
                 default_expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
+                # 🔥 写入数据库时，把 raw_key 也存进去
                 insert_sql = """
-                    INSERT INTO license_bindings 
-                    (card_key, machine_id, expiry_date, status) 
-                    VALUES (%s, %s, %s, 'active')
-                """
-                cursor.execute(insert_sql, (key, mid, default_expiry))
+                               INSERT INTO license_bindings 
+                               (card_key, machine_id, expiry_date, status, raw_key) 
+                               VALUES (%s, %s, %s, 'active', %s)
+                           """
+                cursor.execute(insert_sql, (key, mid, default_expiry, raw))
                 conn.commit()
 
                 return {
