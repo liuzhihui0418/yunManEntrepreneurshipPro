@@ -14,7 +14,7 @@ DB_CONFIG = {
     "host": "127.0.0.1",  # 脚本在服务器本机运行，连本地即可
     "port": 3306,  # MySQL 默认端口
     "user": "root",  # 你的用户名
-    "password": "Aini7758258",  # 🔥 你的数据库密码 (强烈建议修改)
+    "password": "Aini7758258!!",  # 🔥 你的数据库密码 (强烈建议修改)
     "db": "invite_code_system",  # 你的数据库名
     "charset": "utf8mb4",
     "cursorclass": DictCursor
