@@ -11,7 +11,7 @@ app = FastAPI()
 
 # ================= 1. MySQL 数据库配置 =================
 DB_CONFIG = {
-    "host": "0.0.0.0",  # 脚本在服务器本机运行，连本地即可
+    "host": "127.0.0.1",  # 脚本在服务器本机运行，连本地即可
     "port": 3306,  # MySQL 默认端口
     "user": "root",  # 你的用户名
     "password": "Aini7758258!!",  # 🔥 你的数据库密码 (强烈建议修改)
@@ -159,4 +159,4 @@ def verify_license(req: VerifyReq):
 
 if __name__ == "__main__":
     # 本地监听 9000，等待 Nginx 转发
-    uvicorn.run(app, host="127.0.0.1", port=9000)
+    uvicorn.run(app, host="0.0.0.0", port=9000)
