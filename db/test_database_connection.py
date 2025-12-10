@@ -4,7 +4,6 @@
 import pymysql
 import sys
 
-
 def test_mysql_connection():
     """测试MySQL连接"""
     print("=" * 50)
