@@ -13,7 +13,7 @@ class DatabaseManager:
             'host': '127.0.0.1',
             'port': 3306,
             'user': 'root',
-            'password': 'Aini7758258!!',
+            'password': 'aini7758258!!',
             'database': 'invite_code_system',
             'charset': 'utf8mb4',
             'autocommit': True,

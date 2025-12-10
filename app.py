@@ -3,14 +3,16 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 from flask_cors import CORS
 import os
 import uuid
-
+from concurrent.futures import ThreadPoolExecutor # 引入线程池
 # 引入管理器
 from db.redis_manager import redis_manager
 from db.database import db_manager
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
-
+# 在 app = Flask(__name__) 下面添加：
+# 创建一个最大只有 5 个工人的线程池
+executor = ThreadPoolExecutor(max_workers=5)
 # --- 启动钩子：数据预热 ---
 try:
     with app.app_context():
@@ -146,8 +148,8 @@ def create_code():
         db_manager.create_invite_code(c, d, n)
         print(f"MySQL 写入完成: {c}")
 
-    t = threading.Thread(target=background_write_mysql, args=(code, expires_days, note))
-    t.start()
+        # 使用线程池提交任务
+        executor.submit(background_write_mysql, code, expires_days, note)
 
     return jsonify({'success': True, 'message': '创建成功 (后台同步中)'})
 
@@ -178,16 +180,15 @@ def create_batch_codes():
                 # 完全随机生成
                 code = str(uuid.uuid4())[:8].upper()
 
-            # 1. 极速写入 Redis
-            redis_manager.add_single_code(code, expires_days)
-            created_codes.append(code)
+                # 1. Redis (不变)
+                redis_manager.add_single_code(code, expires_days)
+                created_codes.append(code)
 
-            # 2. 异步写入 MySQL
-            def background_write_mysql(c, d, n):
-                db_manager.create_invite_code(c, d, n)
+                # 2. 替换原本的 threading.Thread
+                # 定义任务函数 (需要把函数移到循环外或者作为独立函数，这里为了简便直接用 lambda 或者 wrapper)
+                # 建议直接调用 db_manager
+                executor.submit(db_manager.create_invite_code, code, expires_days, note)
 
-            t = threading.Thread(target=background_write_mysql, args=(code, expires_days, note))
-            t.start()
         # [新增] 强制清除总数缓存，这样回到列表页时总数才会增加
         redis_manager.r.delete("admin:total_codes_count")
         # 清除缓存
