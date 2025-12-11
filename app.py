@@ -251,7 +251,7 @@ def verify_license_db():
         if not data:
             return jsonify({'code': 400, 'msg': '无数据'}), 400
 
-        key = data.get('card_key', '').strip()
+        key = data.get('raw_key', '').strip()
         mid = data.get('machine_id', '').strip()
         raw = data.get('raw_key', '')
 
