@@ -267,7 +267,7 @@ def verify_license_db():
 
                 if not card:
                     print(f"❌ 无效卡密: {key}")
-                    return jsonify({'code': 404, 'msg': '无效卡密(库中不存在)'})
+                    return jsonify({'code': 404, 'msg': '卡密错误，请充值或者联系管理员'})
 
                 if card['status'] != 'active':
                     return jsonify({'code': 403, 'msg': '卡密已封禁'})
@@ -281,11 +281,22 @@ def verify_license_db():
                 # 检查是否是老设备 (如果是，直接通过)
                 for b in bindings:
                     if b['machine_id'] == mid:
+                        # 🔥🔥🔥 新增：检查时间是否过期 🔥🔥🔥
+                        expiry = b.get('expiry_date')
+                        # 如果数据库里有时间，且当前时间已经超过了它
+                        if expiry and datetime.now() > expiry:
+                            print(f"🚫 老设备已过期: {mid} (过期时间: {expiry})")
+                            return jsonify({
+                                'code': 403,
+                                'msg': f'授权已于 {expiry} 过期，请续费',
+                                'expiry_date': str(expiry)
+                            })
+
                         print(f"♻️ 老设备验证通过: {mid}")
                         return jsonify({
                             'code': 200,
                             'msg': '验证成功(老设备)',
-                            'expiry_date': str(b['expiry_date'])
+                            'expiry_date': str(expiry)
                         })
 
                 # --- 步骤 C: 写入新设备 (关键!) ---
