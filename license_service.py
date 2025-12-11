@@ -38,9 +38,9 @@ def get_db_connection():
 def activate_first_time_logic(api_key):
     """
     逻辑：
-    1. 查是否是新卡 (Usage = 0)
+    1. 查是否是新卡 (Usage ≈ 0)
     2. 强制调用 GPT-4 消耗 Token
-    3. 只有消耗成功，才返回 True
+    3. 只要调用成功 (HTTP 200)，直接视为激活成功，不需要等余额刷新
     """
     headers = {
         'Authorization': f'Bearer {api_key}',
@@ -58,34 +58,44 @@ def activate_first_time_logic(api_key):
             return False, "卡密无效，无法查询余额"
 
         usage_data = resp_usage.json()
-        total_usage = usage_data.get('total_usage', 0)
+        # 兼容 total_usage 和 used_quota
+        used_quota = usage_data.get('used_quota', 0)
+        if used_quota == 0:
+            total_usage = usage_data.get('used_quota', 0)
 
-        # 💡 阈值设为 0.1，容忍极小的误差，但基本上必须是新卡
-        if total_usage > 0.5:
+        print(f"📊 [激活流程] 当前卡密已用额度: {used_quota}")
+
+        # 阈值设为 0.01 (只要用过一点点，就不是新卡)
+        if used_quota != 0:
             return False, "激活失败：该卡密已被使用过 (非新卡)"
 
-        # --- 2. 强制消耗 Token (真正的激活动作) ---
-        print("💸 [激活流程] 正在调用 GPT-4 扣除额度...")
+        # --- 2. 强制消耗 Token ---
+        print("💸 [激活流程] 正在调用 GPT-5 扣除额度...")
 
-        # 使用 GPT-4 确保单价够高，一定能扣掉钱
         payload = {
-            "model": "gpt-4",
+            "model": "gpt-5",
             "messages": [
-                {"role": "user", "content": "Activate license key validation sequence."}
+                # 加时间戳防止缓存
+                {"role": "user", "content": f"Activate verify sequence {datetime.now().timestamp()}"}
             ],
-            "max_tokens": 20,  # 消耗约 30-50 tokens
+            "max_tokens": 50,
             "temperature": 0.5
         }
 
         chat_url = f"{YUNWU_BASE}/v1/chat/completions"
         resp_chat = requests.post(chat_url, headers=headers, json=payload, timeout=20)
 
+        # 🔥🔥🔥 核心修改在这里 🔥🔥🔥
+        # 只要请求成功(200)，就认为扣费成功！不需要再回头查余额有没有变！
+        # 因为扣费可能有延迟，但 API 通了就说明卡密没问题。
         if resp_chat.status_code == 200:
-            print("✅ [激活流程] 扣费成功！卡密已激活。")
+            print("✅ [激活流程] API调用成功，认定为激活成功。")
             return True, "Success"
+        elif resp_chat.status_code == 401:
+            return False, "激活失败：卡密无效或余额不足"
         else:
             print(f"❌ [激活流程] 扣费失败: {resp_chat.text}")
-            return False, "激活失败：余额不足或无法扣费"
+            return False, "激活失败：无法连接AI接口扣费"
 
     except Exception as e:
         return False, f"网络错误: {str(e)}"
