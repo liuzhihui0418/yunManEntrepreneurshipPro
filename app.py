@@ -7,7 +7,10 @@ from concurrent.futures import ThreadPoolExecutor # 引入线程池
 # 引入管理器
 from db.redis_manager import redis_manager
 from db.database import db_manager
-
+import pymysql
+from pymysql.cursors import DictCursor
+from datetime import datetime, timedelta
+from flask import request, jsonify  # 确保引入了 request 和 jsonify
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
 # 在 app = Flask(__name__) 下面添加：
@@ -224,6 +227,102 @@ def get_paginated_codes():
 
     data = db_manager.get_codes_with_pagination(page, page_size, search)
     return jsonify({'success': True, **data})
+
+
+# ==========================================
+# 🔥 核心：数据库验证接口 (Flask版，直接复制)
+# ==========================================
+@app.route('/api/license/verify', methods=['POST'])
+def verify_license_db():
+    # 1. 数据库配置
+    MYSQL_CONF = {
+        "host": "127.0.0.1",
+        "port": 3306,
+        "user": "root",
+        "password": "aini7758258!!",  # ⚠️ 密码千万别填错
+        "db": "invite_code_system",
+        "charset": "utf8mb4",
+        "cursorclass": DictCursor
+    }
+
+    try:
+        # 获取客户端数据
+        data = request.get_json()
+        if not data:
+            return jsonify({'code': 400, 'msg': '无数据'}), 400
+
+        key = data.get('card_key', '').strip()
+        mid = data.get('machine_id', '').strip()
+        raw = data.get('raw_key', '')
+
+        print(f"📨 [DB验证] 收到请求 | Key: {key} | Mid: {mid}")
+
+        # 连接数据库
+        conn = pymysql.connect(**MYSQL_CONF)
+        try:
+            with conn.cursor() as cursor:
+                # --- 步骤 A: 查卡是否存在 ---
+                cursor.execute("SELECT * FROM cards WHERE card_key = %s", (key,))
+                card = cursor.fetchone()
+
+                if not card:
+                    print(f"❌ 无效卡密: {key}")
+                    return jsonify({'code': 404, 'msg': '无效卡密(库中不存在)'})
+
+                if card['status'] != 'active':
+                    return jsonify({'code': 403, 'msg': '卡密已封禁'})
+
+                max_dev = card.get('max_devices') or 1
+
+                # --- 步骤 B: 查绑定情况 ---
+                cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (key,))
+                bindings = cursor.fetchall()
+
+                # 检查是否是老设备 (如果是，直接通过)
+                for b in bindings:
+                    if b['machine_id'] == mid:
+                        print(f"♻️ 老设备验证通过: {mid}")
+                        return jsonify({
+                            'code': 200,
+                            'msg': '验证成功(老设备)',
+                            'expiry_date': str(b['expiry_date'])
+                        })
+
+                # --- 步骤 C: 写入新设备 (关键!) ---
+                if len(bindings) >= max_dev:
+                    print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
+                    return jsonify({'code': 403, 'msg': '设备数已满'})
+
+                # 计算过期时间
+                if bindings:
+                    expiry = bindings[0]['expiry_date']
+                else:
+                    expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+
+                # 写入 SQL
+                sql = """
+                    INSERT INTO license_bindings 
+                    (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
+                    VALUES (%s, %s, %s, NOW(), 'active', %s)
+                """
+                cursor.execute(sql, (key, mid, raw, expiry))
+
+                # 🔥🔥🔥 强制提交事务，没这句就写不进去 🔥🔥🔥
+                conn.commit()
+                print("🎉🎉🎉 数据库写入成功！(Commit Done) 🎉🎉🎉")
+
+                return jsonify({
+                    'code': 200,
+                    'msg': '激活成功',
+                    'expiry_date': str(expiry)
+                })
+
+        finally:
+            conn.close()
+
+    except Exception as e:
+        print(f"❌ 验证报错: {e}")
+        return jsonify({'code': 500, 'msg': f'服务器错误: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
