@@ -3,146 +3,172 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import pymysql
 from pymysql.cursors import DictCursor
+import requests
+import json
 from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# 数据库配置 (请填入你的真实信息)
+# ================= 1. 数据库配置 =================
 DB_CONFIG = {
     "host": "127.0.0.1",
     "port": 3306,
     "user": "root",
-    "password": "你的数据库密码",
+    "password": "aini7758258!!",  # 你的数据库密码
     "db": "invite_code_system",
     "charset": "utf8mb4",
     "cursorclass": DictCursor
 }
 
-
-def get_db():
-    return pymysql.connect(**DB_CONFIG)
-
-
-# === 请求模型 ===
-# 1. 管理端生成卡密时发来的数据
-class AddCardReq(BaseModel):
-    card_key: str  # ymgfjc-...
-    raw_key: str  # sk-...
-    max_devices: int = 1
-    amount: float = 0
+# 云雾 API 配置
+YUNWU_BASE = "https://yunwu.ai"
 
 
-# 2. 客户端验证时发来的数据
 class VerifyReq(BaseModel):
     card_key: str
     machine_id: str
+    raw_key: str = None
 
 
-# ==========================================
-# 接口 A: 管理员把卡密存入数据库 (供生成器调用)
-# ==========================================
-@app.post("/admin/add_card")
-def add_card(req: AddCardReq):
-    conn = get_db()
+def get_db_connection():
+    return pymysql.connect(**DB_CONFIG)
+
+
+# ================= 2. 核心：首次激活扣费逻辑 =================
+def activate_first_time_logic(api_key):
+    """
+    逻辑：
+    1. 查是否是新卡 (Usage ≈ 0)
+    2. 强制调用 GPT-4 消耗 Token
+    3. 只要调用成功 (HTTP 200)，直接视为激活成功，不需要等余额刷新
+    """
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+
+    print(f"🔄 [激活流程] 正在检测卡密新旧: {api_key[:8]}...")
+
     try:
-        with conn.cursor() as cursor:
-            # 1. 先查重
-            sql_check = "SELECT id FROM cards WHERE card_key = %s"
-            cursor.execute(sql_check, (req.card_key,))
-            if cursor.fetchone():
-                return {"code": 400, "msg": "卡密已存在"}
+        # --- 1. 查使用量 (防止有人拿用过的废卡来激活) ---
+        usage_url = f"{YUNWU_BASE}/v1/dashboard/billing/usage?start_date=2023-01-01&end_date=2030-01-01"
+        resp_usage = requests.get(usage_url, headers=headers, timeout=10)
 
-            # 2. 插入到仓库表
-            sql_insert = """
-                INSERT INTO cards (card_key, raw_key, max_devices, total_tokens, status)
-                VALUES (%s, %s, %s, %s, 'active')
-            """
-            cursor.execute(sql_insert, (req.card_key, req.raw_key, req.max_devices, req.amount))
-            conn.commit()
-            return {"code": 200, "msg": "入库成功"}
+        if resp_usage.status_code != 200:
+            return False, "卡密无效，无法查询余额"
+
+        usage_data = resp_usage.json()
+        # 兼容 total_usage 和 used_quota
+        used_quota = usage_data.get('used_quota', 0)
+        if used_quota == 0:
+            total_usage = usage_data.get('used_quota', 0)
+
+        print(f"📊 [激活流程] 当前卡密已用额度: {used_quota}")
+
+        # 阈值设为 0.01 (只要用过一点点，就不是新卡)
+        if used_quota != 0:
+            return False, "激活失败：该卡密已被使用过 (非新卡)"
+
+        # --- 2. 强制消耗 Token ---
+        print("💸 [激活流程] 正在调用 GPT-5 扣除额度...")
+
+        payload = {
+            "model": "gpt-5",
+            "messages": [
+                # 加时间戳防止缓存
+                {"role": "user", "content": f"Activate verify sequence {datetime.now().timestamp()}"}
+            ],
+            "max_tokens": 50,
+            "temperature": 0.5
+        }
+
+        chat_url = f"{YUNWU_BASE}/v1/chat/completions"
+        resp_chat = requests.post(chat_url, headers=headers, json=payload, timeout=20)
+
+        # 🔥🔥🔥 核心修改在这里 🔥🔥🔥
+        # 只要请求成功(200)，就认为扣费成功！不需要再回头查余额有没有变！
+        # 因为扣费可能有延迟，但 API 通了就说明卡密没问题。
+        if resp_chat.status_code == 200:
+            print("✅ [激活流程] API调用成功，认定为激活成功。")
+            return True, "Success"
+        elif resp_chat.status_code == 401:
+            return False, "激活失败：卡密无效或余额不足"
+        else:
+            print(f"❌ [激活流程] 扣费失败: {resp_chat.text}")
+            return False, "激活失败：无法连接AI接口扣费"
+
     except Exception as e:
-        return {"code": 500, "msg": str(e)}
-    finally:
-        conn.close()
+        return False, f"网络错误: {str(e)}"
 
 
-# ==========================================
-# 接口 B: 用户软件验证激活 (核心逻辑)
-# ==========================================
+# ================= 3. 验证接口 =================
 @app.post("/verify")
 def verify_license(req: VerifyReq):
     key = req.card_key.strip()
     mid = req.machine_id.strip()
+    raw = req.raw_key
 
-    conn = get_db()
+    conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            # --- 1. 检查卡密是否有效 (查 cards 表) ---
-            sql_card = "SELECT * FROM cards WHERE card_key = %s"
-            cursor.execute(sql_card, (key,))
-            card_info = cursor.fetchone()
+            # === 第一步：查数据库 (看看是不是回头客) ===
+            sql = "SELECT * FROM license_bindings WHERE card_key = %s"
+            cursor.execute(sql, (key,))
+            row = cursor.fetchone()
 
-            if not card_info:
-                return {"code": 404, "msg": "无效的卡密 (未找到记录)"}
+            if row:
+                # 🟢 老用户逻辑：只比对机器码，不扣费
+                print("🔒 [验证流程] 已存在记录，进行设备比对...")
 
-            if card_info['status'] != 'active':
-                return {"code": 403, "msg": "该卡密已被封禁"}
+                bound_mid = row['machine_id']
+                db_status = row['status']
 
-            # --- 2. 检查这台机器是否已经绑定过 (查 license_bindings 表) ---
-            sql_bind = "SELECT * FROM license_bindings WHERE card_key = %s AND machine_id = %s"
-            cursor.execute(sql_bind, (key, mid))
-            existing_bind = cursor.fetchone()
+                # 1. 机器码不对 -> 滚蛋
+                if bound_mid != mid:
+                    return {"code": 403, "msg": f"一机一码校验失败：该卡已绑定其他设备(尾号{bound_mid[-4:]})"}
 
-            # 🟢 情况一：老熟人 (已绑定的机器)
-            if existing_bind:
-                # 检查是否过期 (如果有过期逻辑)
-                # expiry = existing_bind['expiry_date']
-                # if expiry < datetime.now(): return ...
+                # 2. 被封禁 -> 滚蛋
+                if db_status != 'active':
+                    return {"code": 403, "msg": "授权已被禁用"}
 
                 return {
                     "code": 200,
                     "msg": "验证成功",
-                    "expiry_date": str(existing_bind['expiry_date']),
-                    "raw_key": card_info['raw_key']  # 下发真实Key
+                    "expiry_date": str(row['expiry_date'])
                 }
 
-            # 🔴 情况二：新设备 (尝试激活)
             else:
-                # 2.1 统计该卡密目前已经绑定了多少台
-                sql_count = "SELECT COUNT(*) as cnt FROM license_bindings WHERE card_key = %s"
-                cursor.execute(sql_count, (key,))
-                res = cursor.fetchone()
-                current_used = res['cnt']
-                limit_max = card_info['max_devices']
+                # 🔵 新用户逻辑：必须扣费 + 绑定
+                print("🆕 [验证流程] 新卡密，开始激活...")
 
-                # 2.2 判断是否超限
-                if current_used >= limit_max:
-                    return {
-                        "code": 403,
-                        "msg": f"激活失败：该卡密限制 {limit_max} 台设备，当前已激活 {current_used} 台。"
-                    }
+                # 1. 执行扣费逻辑
+                is_success, msg = activate_first_time_logic(key)
+                if not is_success:
+                    return {"code": 400, "msg": msg}
 
-                # 2.3 未超限 -> 执行绑定
-                # 默认给 10 年有效期
-                expiry_date = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+                # 2. 扣费成功 -> 绑定机器码 -> 存入数据库
+                # 设置过期时间 (例如 10 年)
+                default_expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
-                sql_insert_bind = """
-                    INSERT INTO license_bindings (card_key, machine_id, expiry_date, status)
-                    VALUES (%s, %s, %s, 'active')
+                insert_sql = """
+                    INSERT INTO license_bindings 
+                    (card_key, machine_id, expiry_date, status, raw_key) 
+                    VALUES (%s, %s, %s, 'active', %s)
                 """
-                cursor.execute(sql_insert_bind, (key, mid, expiry_date))
+                cursor.execute(insert_sql, (key, mid, default_expiry, raw))
                 conn.commit()
+
+                print(f"💾 [验证流程] 绑定成功！设备ID: {mid}")
 
                 return {
                     "code": 200,
-                    "msg": f"新设备激活成功 (第 {current_used + 1}/{limit_max} 台)",
-                    "expiry_date": expiry_date,
-                    "raw_key": card_info['raw_key']
+                    "msg": "激活成功 (已绑定当前设备)",
+                    "expiry_date": default_expiry
                 }
 
     except Exception as e:
-        print(f"Error: {e}")
-        return {"code": 500, "msg": "服务器验证异常"}
+        print(f"Server Error: {e}")
+        return {"code": 500, "msg": "服务器内部错误"}
     finally:
         conn.close()
 
