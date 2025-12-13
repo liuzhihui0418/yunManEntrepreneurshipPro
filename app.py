@@ -251,11 +251,20 @@ def verify_license_db():
         if not data:
             return jsonify({'code': 400, 'msg': '无数据'}), 400
 
-        key = data.get('card_key', '').strip()  # ← 注意这里应该是 card_key
+        # 修复：客户端发送的 card_key 是加密的，raw_key 才是真正的卡密
+        encrypted_key = data.get('card_key', '').strip()  # 加密的key
+        key = data.get('raw_key', '').strip()  # 这才是真正的卡密
         mid = data.get('machine_id', '').strip()
         raw = data.get('raw_key', '')
 
-        print(f"📨 [DB验证] 收到请求 | Key: {key} | Mid: {mid}")
+        print(f"📨 [DB验证] 收到请求 | Key(解密前): {encrypted_key[:20]}... | Key(解密后): {key} | Mid: {mid}")
+
+        # 如果 raw_key 为空，尝试使用 card_key
+        if not key:
+            key = encrypted_key
+
+        if not key:
+            return jsonify({'code': 400, 'msg': '卡密不能为空'}), 400
 
         # 连接数据库
         conn = pymysql.connect(**MYSQL_CONF)
@@ -266,17 +275,24 @@ def verify_license_db():
                 card = cursor.fetchone()
 
                 if not card:
-
+                    print(f"❌ 无效卡密: {key}")
+                    print(f"📊 当前cards表中所有卡密:")
+                    cursor.execute("SELECT card_key FROM cards LIMIT 10")
+                    all_cards = cursor.fetchall()
+                    for c in all_cards:
+                        print(f"  - {c['card_key']}")
                     return jsonify({'code': 404, 'msg': '卡密错误，请充值或者联系管理员'})
 
                 if card['status'] != 'active':
                     return jsonify({'code': 403, 'msg': '卡密已封禁'})
 
                 max_dev = card.get('max_devices') or 1
+                print(f"✅ 卡密有效，最大设备数: {max_dev}")
 
                 # --- 步骤 B: 查绑定情况 ---
                 cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (key,))
                 bindings = cursor.fetchall()
+                print(f"📊 当前绑定设备数: {len(bindings)}")
 
                 # 检查是否是老设备 (如果是，直接通过)
                 for b in bindings:
@@ -298,8 +314,7 @@ def verify_license_db():
                             'expiry_date': str(expiry)
                         })
 
-                # ===== 注意：从这行开始，是步骤C，必须在 for 循环外 =====
-                # --- 步骤 C: 写入新设备 (关键!) ---
+                # --- 步骤 C: 写入新设备 ---
                 if len(bindings) >= max_dev:
                     print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
                     return jsonify({'code': 403, 'msg': '设备数已满'})
@@ -319,7 +334,7 @@ def verify_license_db():
                             'expiry_date': str(expiry)
                         })
                 else:
-                    # 如果是全新的卡，生成新的过期时间
+                    # 如果是全新的卡，生成新的过期时间 (3650天≈10年)
                     expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
                 # 写入 SQL
