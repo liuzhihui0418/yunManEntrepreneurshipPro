@@ -239,7 +239,7 @@ def verify_license_db():
         "host": "127.0.0.1",
         "port": 3306,
         "user": "root",
-        "password": "aini7758258!!",  # ⚠️ 密码千万别填错
+        "password": "aini7758258!!",
         "db": "invite_code_system",
         "charset": "utf8mb4",
         "cursorclass": DictCursor
@@ -251,7 +251,7 @@ def verify_license_db():
         if not data:
             return jsonify({'code': 400, 'msg': '无数据'}), 400
 
-        key = data.get('raw_key', '').strip()
+        key = data.get('card_key', '').strip()  # ← 注意这里应该是 card_key
         mid = data.get('machine_id', '').strip()
         raw = data.get('raw_key', '')
 
@@ -281,9 +281,8 @@ def verify_license_db():
                 # 检查是否是老设备 (如果是，直接通过)
                 for b in bindings:
                     if b['machine_id'] == mid:
-                        # 🔥🔥🔥 新增：检查时间是否过期 🔥🔥🔥
+                        # 检查时间是否过期
                         expiry = b.get('expiry_date')
-                        # 如果数据库里有时间，且当前时间已经超过了它
                         if expiry and datetime.now() > expiry:
                             print(f"🚫 老设备已过期: {mid} (过期时间: {expiry})")
                             return jsonify({
@@ -299,39 +298,40 @@ def verify_license_db():
                             'expiry_date': str(expiry)
                         })
 
-                        # --- 步骤 C: 写入新设备 (关键!) ---
-                        if len(bindings) >= max_dev:
-                            print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
-                            return jsonify({'code': 403, 'msg': '设备数已满'})
+                # ===== 注意：从这行开始，是步骤C，必须在 for 循环外 =====
+                # --- 步骤 C: 写入新设备 (关键!) ---
+                if len(bindings) >= max_dev:
+                    print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
+                    return jsonify({'code': 403, 'msg': '设备数已满'})
 
-                        # 计算过期时间
-                        if bindings:
-                            # 如果有旧的绑定记录，沿用旧的过期时间
-                            expiry = bindings[0]['expiry_date']
+                # 计算过期时间
+                expiry = None
+                if bindings:
+                    # 如果有旧的绑定记录，沿用旧的过期时间
+                    expiry = bindings[0]['expiry_date']
 
-                            # 🔥🔥🔥 新增：既然沿用旧时间，那必须检查是否已经过期 🔥🔥🔥
-                            if expiry and datetime.now() > expiry:
-                                print(f"🚫 卡密已过期，禁止新设备绑定: {expiry}")
-                                return jsonify({
-                                    'code': 403,
-                                    'msg': f'该卡密已于 {expiry} 过期，无法激活新设备',
-                                    'expiry_date': str(expiry)
-                                })
-                        else:
-                            # 如果是全新的卡，生成新的过期时间 (比如 10 年)
-                            # 也可以去 cards 表里查具体的 duration
-                            expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+                    # 检查是否已经过期
+                    if expiry and datetime.now() > expiry:
+                        print(f"🚫 卡密已过期，禁止新设备绑定: {expiry}")
+                        return jsonify({
+                            'code': 403,
+                            'msg': f'该卡密已于 {expiry} 过期，无法激活新设备',
+                            'expiry_date': str(expiry)
+                        })
+                else:
+                    # 如果是全新的卡，生成新的过期时间
+                    expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
-                        # 写入 SQL
-                        sql = """
-                                    INSERT INTO license_bindings 
-                                    (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
-                                    VALUES (%s, %s, %s, NOW(), 'active', %s)
-                                """
-                        cursor.execute(sql, (key, mid, raw, expiry))
+                # 写入 SQL
+                sql = """
+                    INSERT INTO license_bindings 
+                    (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
+                    VALUES (%s, %s, %s, NOW(), 'active', %s)
+                """
+                cursor.execute(sql, (key, mid, raw, expiry))
 
-                        # 🔥🔥🔥 强制提交事务，没这句就写不进去 🔥🔥🔥
-                        conn.commit()
+                # 强制提交事务
+                conn.commit()
                 print("🎉🎉🎉 数据库写入成功！(Commit Done) 🎉🎉🎉")
 
                 return jsonify({
