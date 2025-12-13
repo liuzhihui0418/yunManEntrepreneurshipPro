@@ -255,9 +255,8 @@ def verify_license_db():
         mid = data.get('machine_id', '').strip()  # 设备ID
         raw = data.get('raw_key', '')  # 原始key
 
-        print(f"📨 [DB验证] 收到请求 | Key: {key} | Mid: {mid}")
+        print(f"📨 [DB验证] 收到请求 | Key: {key[:30]}... | Mid: {mid}")
 
-        # 先验证卡密格式（调试用）
         if not key or not mid:
             return jsonify({'code': 400, 'msg': '卡密或设备ID不能为空'}), 400
 
@@ -265,50 +264,42 @@ def verify_license_db():
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                # --- 步骤 A: 查卡是否存在 ---
-                # 先查card_key字段
-                cursor.execute("SELECT * FROM cards WHERE card_key = %s", (key,))
+                # --- 步骤 A: 查卡是否存在（通过 card_key 字段）---
+                sql_card = "SELECT * FROM cards WHERE card_key = %s"
+                cursor.execute(sql_card, (key,))
                 card = cursor.fetchone()
 
-                # 如果没有找到，再查raw_key字段（图片中的卡密可能是加密前的值）
-                if not card and raw:
-                    cursor.execute("SELECT * FROM cards WHERE raw_key = %s", (raw,))
-                    card = cursor.fetchone()
-                    if card:
-                        print(f"ℹ️ 通过raw_key找到卡密: {raw} -> {card.get('card_key')}")
-                        key = card.get('card_key', key)  # 使用解密后的key
-
                 if not card:
-                    print(f"❌ 无效卡密: {key}")
+                    print(f"❌ 数据库中没有找到卡密: {key[:30]}...")
                     return jsonify({'code': 404, 'msg': '卡密错误，请充值或者联系管理员'})
 
-                if card['status'] != 'active':
+                print(f"✅ 找到卡信息: ID={card.get('id')}, 状态={card.get('status')}")
+
+                if card.get('status') != 'active':
                     return jsonify({'code': 403, 'msg': '卡密已封禁'})
 
                 max_dev = card.get('max_devices') or 1
 
-                # 获取卡的过期时间（优先从cards表获取）
-                card_expiry = card.get('expiry_date')
-                if not card_expiry:
-                    # 如果cards表没有expiry_date，使用默认3650天
-                    card_expiry = (datetime.now() + timedelta(days=3650))
-                elif isinstance(card_expiry, str):
-                    # 如果是字符串，转换为datetime
-                    card_expiry = datetime.strptime(card_expiry, "%Y-%m-%d %H:%M:%S")
+                # cards 表没有 expiry_date 字段，使用默认 10 年有效期
+                card_expiry = datetime.now() + timedelta(days=3650)
+                print(f"📅 卡过期时间（默认10年）: {card_expiry}")
 
                 # --- 步骤 B: 查绑定情况 ---
                 cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (key,))
                 bindings = cursor.fetchall()
+                print(f"🔗 已绑定设备数: {len(bindings)}")
 
                 # 检查是否是老设备
                 existing_device = None
                 for b in bindings:
-                    if b['machine_id'] == mid:
+                    if b.get('machine_id') == mid:
                         existing_device = b
                         break
 
                 # 🔥🔥🔥 如果是老设备 🔥🔥🔥
                 if existing_device:
+                    print(f"🔍 找到已绑定设备: {mid}")
+
                     # 检查设备状态是否被封禁
                     if existing_device.get('status') != 'active':
                         print(f"🚫 设备已被封禁: {mid}")
@@ -318,39 +309,48 @@ def verify_license_db():
                             'expiry_date': str(existing_device.get('expiry_date', card_expiry))
                         })
 
-                    # 检查时间是否过期
+                    # 检查设备绑定是否过期
                     device_expiry = existing_device.get('expiry_date')
+                    expiry_date = card_expiry  # 默认使用卡的有效期
+
                     if device_expiry:
                         if isinstance(device_expiry, str):
-                            device_expiry = datetime.strptime(device_expiry, "%Y-%m-%d %H:%M:%S")
+                            try:
+                                device_expiry = datetime.strptime(device_expiry, "%Y-%m-%d %H:%M:%S")
+                            except:
+                                try:
+                                    device_expiry = datetime.strptime(device_expiry, "%Y-%m-%d")
+                                except:
+                                    device_expiry = None
 
-                        if datetime.now() > device_expiry:
-                            print(f"🚫 老设备已过期: {mid} (过期时间: {device_expiry})")
-                            return jsonify({
-                                'code': 403,
-                                'msg': f'授权已于 {device_expiry} 过期，请续费',
-                                'expiry_date': str(device_expiry)
-                            })
+                        if device_expiry:
+                            expiry_date = device_expiry
 
-                        expiry_date = device_expiry
-                    else:
-                        expiry_date = card_expiry
+                            if datetime.now() > device_expiry:
+                                print(f"🚫 老设备已过期: {mid} (过期时间: {device_expiry})")
+                                return jsonify({
+                                    'code': 403,
+                                    'msg': f'授权已于 {device_expiry} 过期，请续费',
+                                    'expiry_date': str(device_expiry)
+                                })
 
                     print(f"♻️ 老设备验证通过: {mid}")
                     return jsonify({
                         'code': 200,
-                        'msg': '验证成功(老设备)',
+                        'msg': '验证成功',
                         'expiry_date': str(expiry_date)
                     })
 
                 # 🔥🔥🔥 如果是新设备 🔥🔥🔥
                 else:
+                    print(f"🆕 新设备绑定: {mid}")
+
                     # 检查设备数是否已满
                     if len(bindings) >= max_dev:
                         print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
                         return jsonify({'code': 403, 'msg': '设备数已满'})
 
-                    # 检查卡密是否已过期
+                    # 检查卡密是否已过期（基于卡默认的10年）
                     if datetime.now() > card_expiry:
                         print(f"🚫 卡密已过期: {card_expiry}")
                         return jsonify({
@@ -359,8 +359,27 @@ def verify_license_db():
                             'expiry_date': str(card_expiry)
                         })
 
-                    # 使用卡的过期时间
+                    # 计算新设备的过期时间
                     expiry_to_use = card_expiry
+
+                    # 如果有已绑定的设备，使用第一个设备的过期时间
+                    if bindings:
+                        first_binding = bindings[0]
+                        device_expiry = first_binding.get('expiry_date')
+                        if device_expiry:
+                            if isinstance(device_expiry, str):
+                                try:
+                                    device_expiry = datetime.strptime(device_expiry, "%Y-%m-%d %H:%M:%S")
+                                except:
+                                    try:
+                                        device_expiry = datetime.strptime(device_expiry, "%Y-%m-%d")
+                                    except:
+                                        device_expiry = None
+
+                            if device_expiry:
+                                expiry_to_use = device_expiry
+
+                    print(f"📅 新设备过期时间: {expiry_to_use}")
 
                     # 写入新设备绑定
                     sql = """
@@ -368,6 +387,7 @@ def verify_license_db():
                         (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
                         VALUES (%s, %s, %s, NOW(), 'active', %s)
                     """
+
                     cursor.execute(sql, (key, mid, raw, expiry_to_use))
                     conn.commit()
 
@@ -378,23 +398,14 @@ def verify_license_db():
                         'expiry_date': str(expiry_to_use)
                     })
 
-        except pymysql.err.IntegrityError as e:
-            # 处理唯一约束冲突（可能并发请求导致重复插入）
-            if "Duplicate entry" in str(e):
-                print(f"⚠️ 设备已存在，重新查询: {mid}")
-                # 重新查询一次
-                cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s AND machine_id = %s", (key, mid))
-                existing = cursor.fetchone()
-                if existing:
-                    expiry = existing.get('expiry_date', card_expiry)
-                    return jsonify({
-                        'code': 200,
-                        'msg': '设备已存在',
-                        'expiry_date': str(expiry)
-                    })
-            raise e
+        except Exception as db_error:
+            print(f"❌ 数据库操作错误: {db_error}")
+            if conn:
+                conn.rollback()
+            return jsonify({'code': 500, 'msg': f'数据库错误: {str(db_error)}'}), 500
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     except Exception as e:
         print(f"❌ 验证报错: {e}")
