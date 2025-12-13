@@ -266,7 +266,7 @@ def verify_license_db():
                 card = cursor.fetchone()
 
                 if not card:
-                    print(f"❌ 无效卡密: {key}")
+
                     return jsonify({'code': 404, 'msg': '卡密错误，请充值或者联系管理员'})
 
                 if card['status'] != 'active':
