@@ -36,19 +36,22 @@ def get_db_connection():
 def verify_license(req: VerifyReq):
     print(f"\n📨 [收到请求] Key: {req.card_key} | Machine: {req.machine_id}")
 
-    key = req.card_key.strip()
+    # 🆕 修改：同样提取核心卡密
+    raw_key = req.raw_key or req.card_key
+    if '=' in raw_key:
+        real_key = raw_key.split('=')[0]  # 去掉=签名
+    else:
+        real_key = raw_key[:60]  # 截取前60个字符
+
+    key = real_key.strip()
     mid = req.machine_id.strip()
     raw = req.raw_key
 
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            # ---------------------------------------------------
-            # 第一步：检查 Cards 表 (外键检查)
-            # ---------------------------------------------------
-            print("🔍 正在查询 Cards 表...")
-            sql_card = "SELECT * FROM cards WHERE card_key = %s"
-            cursor.execute(sql_card, (key,))
+            # 🆕 修改：使用real_key查询
+            cursor.execute("SELECT * FROM cards WHERE card_key = %s", (key,))
             card_info = cursor.fetchone()
 
             if not card_info:
