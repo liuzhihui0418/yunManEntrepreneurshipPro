@@ -40,27 +40,26 @@ def verify_license(req: VerifyReq):
     mid = req.machine_id.strip()
     raw = req.raw_key
 
+    # 🔥 1. 提前初始化时间变量，防止报错
+    expiry_str = None
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
             # ---------------------------------------------------
-            # 第一步：检查 Cards 表 (外键检查)
+            # 第一步：检查 Cards 表
             # ---------------------------------------------------
-            print("🔍 正在查询 Cards 表...")
             sql_card = "SELECT * FROM cards WHERE card_key = %s"
             cursor.execute(sql_card, (key,))
             card_info = cursor.fetchone()
 
             if not card_info:
-                print(f"❌ 错误: Cards 表里找不到 Key: {key}")
-                print(f"⚠️  提示: 请检查数据库 Cards 表里的 card_key 字段是否完全一致")
                 return {"code": 404, "msg": "无效的卡密(服务端不存在该卡)"}
 
             if card_info['status'] != 'active':
                 return {"code": 403, "msg": "该卡密已被封禁"}
 
             max_devices = card_info.get('max_devices') or 1
-            print(f"✅ 卡密有效，最大设备数: {max_devices}")
 
             # ---------------------------------------------------
             # 第二步：检查 Bindings 表
@@ -74,52 +73,59 @@ def verify_license(req: VerifyReq):
 
             if existing_record:
                 print("♻️  设备已存在，直接返回成功")
+                # 🔥 2. 统一取值
+                expiry_str = str(existing_record['expiry_date'])
                 return {
                     "code": 200,
                     "msg": "验证成功",
-                    "expiry_date": str(existing_record['expiry_date'])
+                    "expiry_date": expiry_str
                 }
 
             # ---------------------------------------------------
-            # 第三步：写入新绑定 (关键步骤！)1122
+            # 第三步：写入新绑定
             # ---------------------------------------------------
             if len(bindings) >= max_devices:
-                print(f"⛔ 设备数已满 ({len(bindings)}/{max_devices})")
                 return {"code": 403, "msg": "设备数已满"}
 
             print("📝 正在准备写入 license_bindings...")
 
-            # 计算过期时间
+            # 🔥 3. 计算过期时间 (赋值给 expiry_str)
             if len(bindings) > 0:
-                expiry_date = bindings[0]['expiry_date']
+                # 如果有其他设备绑定过，跟随第一个设备的过期时间
+                expiry_str = str(bindings[0]['expiry_date'])
             else:
-                expiry_date = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+                # 如果是首台设备，从现在起加10年
+                expiry_str = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+
+            # 🔥 4. 再次检查：确保 expiry_str 不为空
+            if not expiry_str:
+                raise ValueError("过期时间计算失败")
 
             insert_sql = """
                 INSERT INTO license_bindings 
                 (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
                 VALUES (%s, %s, %s, NOW(), 'active', %s)
             """
-            cursor.execute(insert_sql, (key, mid, raw, expiry_date))
+            cursor.execute(insert_sql, (key, mid, raw, expiry_str))
 
-            # 🔥🔥🔥🔥🔥 必须提交！否则数据不会进数据库 🔥🔥🔥🔥🔥
             conn.commit()
-            print("🎉🎉🎉 写入成功！(Commit Done) 🎉🎉🎉")
+            print("🎉🎉🎉 写入成功！🎉🎉🎉")
 
             return {
                 "code": 200,
                 "msg": "激活成功",
-                "expiry_date": str(expiry_date)
+                "expiry_date": expiry_str
             }
 
     except pymysql.err.IntegrityError as e:
-        print(f"💥 数据库完整性错误 (通常是外键不匹配): {e}")
+        print(f"💥 数据库完整性错误: {e}")
         conn.rollback()
         return {"code": 500, "msg": "激活失败：卡密数据不一致"}
 
     except Exception as e:
         print(f"💥 系统严重错误: {e}")
         conn.rollback()
+        # 这里把具体错误返回给前端，方便你看
         return {"code": 500, "msg": f"系统错误: {str(e)}"}
 
     finally:
