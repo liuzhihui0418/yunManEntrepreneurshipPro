@@ -82,7 +82,7 @@ def verify_license(req: VerifyReq):
             if len(bindings) >= max_devices:
                 return {"code": 403, "msg": "设备数已满"}
 
-            print("📝 正在准备写入 license_bindings...")
+            print("📝 正在准备写入 license_bindings11...")
 
             # 🔥 安全计算过期时间
             if bindings and len(bindings) > 0:
