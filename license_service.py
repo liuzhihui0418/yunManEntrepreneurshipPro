@@ -31,7 +31,6 @@ def get_db_connection():
     return conn
 
 
-# ================= 2. 核心验证接口 =================
 @app.post("/api/license/verify")
 def verify_license(req: VerifyReq):
     print(f"\n📨 [收到请求] Key: {req.card_key} | Machine: {req.machine_id}")
@@ -39,9 +38,6 @@ def verify_license(req: VerifyReq):
     key = req.card_key.strip()
     mid = req.machine_id.strip()
     raw = req.raw_key
-
-    # 🔥 1. 提前初始化时间变量，防止报错
-    expiry_str = None
 
     conn = get_db_connection()
     try:
@@ -73,12 +69,11 @@ def verify_license(req: VerifyReq):
 
             if existing_record:
                 print("♻️  设备已存在，直接返回成功")
-                # 🔥 2. 统一取值
-                expiry_str = str(existing_record['expiry_date'])
+                expiry_date = str(existing_record['expiry_date'])
                 return {
                     "code": 200,
                     "msg": "验证成功",
-                    "expiry_date": expiry_str
+                    "expiry_date": expiry_date
                 }
 
             # ---------------------------------------------------
@@ -89,47 +84,35 @@ def verify_license(req: VerifyReq):
 
             print("📝 正在准备写入 license_bindings...")
 
-            # 🔥 3. 计算过期时间 (赋值给 expiry_str)
-            if len(bindings) > 0:
-                # 如果有其他设备绑定过，跟随第一个设备的过期时间
-                expiry_str = str(bindings[0]['expiry_date'])
+            # 🔥 安全计算过期时间
+            if bindings and len(bindings) > 0:
+                expiry_date = str(bindings[0]['expiry_date'])
             else:
-                # 如果是首台设备，从现在起加10年
-                expiry_str = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
-
-            # 🔥 4. 再次检查：确保 expiry_str 不为空
-            if not expiry_str:
-                raise ValueError("过期时间计算失败")
+                expiry_date = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
             insert_sql = """
                 INSERT INTO license_bindings 
                 (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
                 VALUES (%s, %s, %s, NOW(), 'active', %s)
             """
-            cursor.execute(insert_sql, (key, mid, raw, expiry_str))
-
+            cursor.execute(insert_sql, (key, mid, raw, expiry_date))
             conn.commit()
             print("🎉🎉🎉 写入成功！🎉🎉🎉")
 
             return {
                 "code": 200,
                 "msg": "激活成功",
-                "expiry_date": expiry_str
+                "expiry_date": expiry_date
             }
 
-    except pymysql.err.IntegrityError as e:
-        print(f"💥 数据库完整性错误: {e}")
-        conn.rollback()
-        return {"code": 500, "msg": "激活失败：卡密数据不一致"}
-
     except Exception as e:
-        print(f"💥 系统严重错误: {e}")
-        conn.rollback()
-        # 这里把具体错误返回给前端，方便你看
+        print(f"💥 系统错误: {e}")
+        if conn:
+            conn.rollback()
         return {"code": 500, "msg": f"系统错误: {str(e)}"}
-
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
