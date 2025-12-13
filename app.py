@@ -282,7 +282,6 @@ def verify_license_db():
 
                 # cards 表没有 expiry_date 字段，使用默认 10 年有效期
                 card_expiry = datetime.now() + timedelta(days=3650)
-                print(f"📅 卡过期时间（默认10年）: {card_expiry}")
 
                 # --- 步骤 B: 查绑定情况 ---
                 cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (key,))
