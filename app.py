@@ -251,107 +251,107 @@ def verify_license_db():
         if not data:
             return jsonify({'code': 400, 'msg': '无数据'}), 400
 
-        # 🎯 修改这里：提取真正的卡密
+        # 修复：客户端发送的 card_key 是加密的，raw_key 才是真正的卡密
         encrypted_key = data.get('card_key', '').strip()  # 加密的key
-        raw_key = data.get('raw_key', '').strip()  # 包含签名的完整卡密
+        key = data.get('raw_key', '').strip()  # 这才是真正的卡密
         mid = data.get('machine_id', '').strip()
+        raw = data.get('raw_key', '')
 
-        # 🆕 新增：提取核心卡密（与数据库匹配）
-        # 从你的数据看，真正的卡密是 raw_key 的某一部分
-        # 方案1：提取签名前的部分
-        if '=' in raw_key:
-            # 去掉base64的=填充
-            real_key = raw_key.split('=')[0]
-        else:
-            real_key = raw_key
+        print(f"📨 [DB验证] 收到请求 | Key(解密前): {encrypted_key[:20]}... | Key(解密后): {key} | Mid: {mid}")
 
-        # 方案2：或者提取特定长度的前部分
-        # 从你的截图看，数据库卡密长度大约是 50-60
-        # real_key = raw_key[:60]  # 截取前60个字符
+        # 如果 raw_key 为空，尝试使用 card_key
+        if not key:
+            key = encrypted_key
 
-        print(f"📨 [DB验证] 收到请求")
-        print(f"  原始raw_key: {raw_key[:50]}...")
-        print(f"  提取的real_key: {real_key}")
-        print(f"  Machine ID: {mid}")
-
-        # 如果提取失败，使用原始值
-        if not real_key:
-            real_key = raw_key
-
-        if not real_key:
+        if not key:
             return jsonify({'code': 400, 'msg': '卡密不能为空'}), 400
 
         # 连接数据库
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                # 🆕 修改：使用提取的real_key查询
-                cursor.execute("SELECT * FROM cards WHERE card_key = %s", (real_key,))
+                # --- 步骤 A: 查卡是否存在 ---
+                cursor.execute("SELECT * FROM cards WHERE card_key = %s", (key,))
                 card = cursor.fetchone()
 
                 if not card:
-                    print(f"❌ 无效卡密: {real_key}")
-                    # 🆕 调试：查看数据库实际存储的卡密
-                    cursor.execute("SELECT card_key, LENGTH(card_key) as len FROM cards ORDER BY id DESC LIMIT 5")
+                    print(f"❌ 无效卡密: {key}")
+                    print(f"📊 当前cards表中所有卡密:")
+                    cursor.execute("SELECT card_key FROM cards LIMIT 10")
                     all_cards = cursor.fetchall()
-                    print(f"📊 数据库中最近5条卡密:")
                     for c in all_cards:
-                        print(f"  - 长度{c['len']}: {c['card_key']}")
+                        print(f"  - {c['card_key']}")
                     return jsonify({'code': 404, 'msg': '卡密错误，请充值或者联系管理员'})
 
                 if card['status'] != 'active':
                     return jsonify({'code': 403, 'msg': '卡密已封禁'})
 
                 max_dev = card.get('max_devices') or 1
-                print(f"✅ 卡密有效，状态: {card['status']}, 最大设备数: {max_dev}")
+                print(f"✅ 卡密有效，最大设备数: {max_dev}")
 
-                # 🆕 修改：使用real_key查询绑定
-                cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (real_key,))
+                # --- 步骤 B: 查绑定情况 ---
+                cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (key,))
                 bindings = cursor.fetchall()
-                print(f"📊 当前绑定设备数: {len(bindings)}/{max_dev}")
+                print(f"📊 当前绑定设备数: {len(bindings)}")
 
-                # 检查是否是老设备
+                # 检查是否是老设备 (如果是，直接通过)
                 for b in bindings:
                     if b['machine_id'] == mid:
+                        # 检查时间是否过期
                         expiry = b.get('expiry_date')
                         if expiry and datetime.now() > expiry:
+                            print(f"🚫 老设备已过期: {mid} (过期时间: {expiry})")
                             return jsonify({
                                 'code': 403,
-                                'msg': f'授权已于 {expiry} 过期',
+                                'msg': f'授权已于 {expiry} 过期，请续费',
                                 'expiry_date': str(expiry)
                             })
+
+                        print(f"♻️ 老设备验证通过: {mid}")
                         return jsonify({
                             'code': 200,
-                            'msg': '验证成功',
+                            'msg': '验证成功(老设备)',
                             'expiry_date': str(expiry)
                         })
 
-                # 设备数量控制
+                # --- 步骤 C: 写入新设备 ---
                 if len(bindings) >= max_dev:
-                    print(f"⛔ 设备数已满: {len(bindings)}/{max_dev}")
-                    return jsonify({'code': 403, 'msg': f'设备数已满(最多{max_dev}台)'})
+                    print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
+                    return jsonify({'code': 403, 'msg': '设备数已满'})
 
                 # 计算过期时间
                 expiry = None
                 if bindings:
+                    # 如果有旧的绑定记录，沿用旧的过期时间
                     expiry = bindings[0]['expiry_date']
+
+                    # 检查是否已经过期
+                    if expiry and datetime.now() > expiry:
+                        print(f"🚫 卡密已过期，禁止新设备绑定: {expiry}")
+                        return jsonify({
+                            'code': 403,
+                            'msg': f'该卡密已于 {expiry} 过期，无法激活新设备',
+                            'expiry_date': str(expiry)
+                        })
                 else:
+                    # 如果是全新的卡，生成新的过期时间 (3650天≈10年)
                     expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
-                # 🆕 修改：使用real_key写入
+                # 写入 SQL
                 sql = """
                     INSERT INTO license_bindings 
                     (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
                     VALUES (%s, %s, %s, NOW(), 'active', %s)
                 """
-                cursor.execute(sql, (real_key, mid, raw_key, expiry))
+                cursor.execute(sql, (key, mid, raw, expiry))
 
+                # 强制提交事务
                 conn.commit()
-                print(f"🎉 新设备绑定成功: {mid}")
+                print("🎉🎉🎉 数据库写入成功！(Commit Done) 🎉🎉🎉")
 
                 return jsonify({
                     'code': 200,
-                    'msg': f'激活成功(第{len(bindings) + 1}/{max_dev}台设备)',
+                    'msg': '激活成功',
                     'expiry_date': str(expiry)
                 })
 
