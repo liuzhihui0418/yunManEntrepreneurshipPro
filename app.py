@@ -247,7 +247,10 @@ def verify_license_db():
 
     try:
         data = request.get_json()
-        # 直接获取客户端传来的长字符串，不进行任何解密
+        if not data:
+            return jsonify({'code': 400, 'msg': '无请求数据'}), 400
+
+        # 直接获取客户端传来的原始长字符串卡密
         client_key = data.get('card_key', '').strip()
         mid = data.get('machine_id', '').strip()
 
@@ -257,8 +260,7 @@ def verify_license_db():
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                # --- 步骤 1: 直接匹配长字符串卡密 ---
-                # 注意：数据库 cards 表里的 card_key 字段长度必须够长（建议 VARCHAR(512)）
+                # --- 步骤 1: 校验卡密主表状态 ---
                 cursor.execute("SELECT max_devices, status FROM cards WHERE card_key = %s", (client_key,))
                 card = cursor.fetchone()
 
@@ -271,35 +273,33 @@ def verify_license_db():
                 # 获取允许的最大设备数
                 max_allowed = card.get('max_devices', 1)
 
-                # --- 步骤 2: 检查该长卡密的已绑定设备 ---
-                cursor.execute("SELECT machine_id, expiry_date FROM license_bindings WHERE card_key = %s",
-                               (client_key,))
+                # --- 步骤 2: 检查已绑定设备情况 ---
+                cursor.execute("SELECT machine_id, expiry_date, status FROM license_bindings WHERE card_key = %s", (client_key,))
                 bindings = cursor.fetchall()
 
-                # 检查当前设备是否已经绑定过
+                # 检查当前设备是否在绑定记录中
                 current_binding = next((b for b in bindings if b['machine_id'] == mid), None)
 
                 if current_binding:
-                    # ✅ 新增：校验该设备的绑定状态是否为 active
-                    # 如果你在后台把某个特定的设备 status 改成了 'banned'，这里就能拦截
+                    # 校验该特定设备的绑定状态（如果不是 active 则拒绝）
                     if current_binding.get('status') != 'active':
                         return jsonify({'code': 403, 'msg': '该设备授权已被禁用'})
 
-                    # 设备已存在且状态正常，检查有效期
+                    # 校验有效期
                     expiry = current_binding['expiry_date']
                     if expiry and datetime.now() > expiry:
                         return jsonify({'code': 403, 'msg': '授权已过期'})
 
                     return jsonify({'code': 200, 'msg': '验证通过', 'expiry_date': str(expiry)})
 
-                # --- 步骤 3: 新设备绑定与数量控制 ---
+                # --- 步骤 3: 新设备激活与额度控制 ---
                 if len(bindings) >= max_allowed:
-                    return jsonify({'code': 403, 'msg': f'授权失败：该卡密仅支持 {max_allowed} 台设备'})
+                    return jsonify({'code': 403, 'msg': f'激活失败：该卡密仅支持 {max_allowed} 台设备'})
 
-                # 如果是该卡的第一台设备，设置有效期（或从卡密表获取）
+                # 设置 10 年有效期 (3650天)
                 new_expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
-                # 插入绑定记录
+                # 写入新的绑定记录，状态设为 active
                 insert_sql = """
                         INSERT INTO license_bindings 
                         (card_key, machine_id, activation_time, status, expiry_date) 
@@ -312,7 +312,9 @@ def verify_license_db():
         finally:
             conn.close()
     except Exception as e:
-        return jsonify({'code': 500, 'msg': str(e)}), 500
+        # 打印详细错误方便 nohup 日志排查
+        print(f"Verify Error: {str(e)}")
+        return jsonify({'code': 500, 'msg': f"服务器错误: {str(e)}"}), 500
 
 
 if __name__ == '__main__':
