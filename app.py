@@ -246,121 +246,67 @@ def verify_license_db():
     }
 
     try:
-        # 获取客户端数据
         data = request.get_json()
-        if not data:
-            return jsonify({'code': 400, 'msg': '无数据'}), 400
-
-        # 修复：客户端发送的 card_key 是加密的，raw_key 才是真正的卡密
-        encrypted_key = data.get('card_key', '').strip()  # 加密的key
-        key = data.get('raw_key', '').strip()  # 这才是真正的卡密
+        # 直接获取客户端传来的长字符串，不进行任何解密
+        client_key = data.get('card_key', '').strip()
         mid = data.get('machine_id', '').strip()
-        raw = data.get('raw_key', '')
 
-        print(f"📨 [DB验证] 收到请求 | Key(解密前): {encrypted_key[:20]}... | Key(解密后): {key} | Mid: {mid}")
+        if not client_key or not mid:
+            return jsonify({'code': 400, 'msg': '参数缺失'}), 400
 
-        # 如果 raw_key 为空，尝试使用 card_key
-        if not key:
-            key = encrypted_key
-
-        if not key:
-            return jsonify({'code': 400, 'msg': '卡密不能为空'}), 400
-
-        # 连接数据库
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                # --- 步骤 A: 查卡是否存在 ---
-                cursor.execute("SELECT * FROM cards WHERE card_key = %s", (key,))
+                # --- 步骤 1: 直接匹配长字符串卡密 ---
+                # 注意：数据库 cards 表里的 card_key 字段长度必须够长（建议 VARCHAR(512)）
+                cursor.execute("SELECT max_devices, status FROM cards WHERE card_key = %s", (client_key,))
                 card = cursor.fetchone()
 
                 if not card:
-                    print(f"❌ 无效卡密: {key}")
-                    print(f"📊 当前cards表中所有卡密:")
-                    cursor.execute("SELECT card_key FROM cards LIMIT 10")
-                    all_cards = cursor.fetchall()
-                    for c in all_cards:
-                        print(f"  - {c['card_key']}")
-                    return jsonify({'code': 404, 'msg': '卡密错误，请充值或者联系管理员'})
+                    return jsonify({'code': 404, 'msg': '卡密不存在'})
 
                 if card['status'] != 'active':
-                    return jsonify({'code': 403, 'msg': '卡密已封禁'})
+                    return jsonify({'code': 403, 'msg': '该卡密已被封禁'})
 
-                max_dev = card.get('max_devices') or 1
-                print(f"✅ 卡密有效，最大设备数: {max_dev}")
+                # 获取允许的最大设备数
+                max_allowed = card.get('max_devices', 1)
 
-                # --- 步骤 B: 查绑定情况 ---
-                cursor.execute("SELECT * FROM license_bindings WHERE card_key = %s", (key,))
+                # --- 步骤 2: 检查该长卡密的已绑定设备 ---
+                cursor.execute("SELECT machine_id, expiry_date FROM license_bindings WHERE card_key = %s",
+                               (client_key,))
                 bindings = cursor.fetchall()
-                print(f"📊 当前绑定设备数: {len(bindings)}")
 
-                # 检查是否是老设备 (如果是，直接通过)
-                for b in bindings:
-                    if b['machine_id'] == mid:
-                        # 检查时间是否过期
-                        expiry = b.get('expiry_date')
-                        if expiry and datetime.now() > expiry:
-                            print(f"🚫 老设备已过期: {mid} (过期时间: {expiry})")
-                            return jsonify({
-                                'code': 403,
-                                'msg': f'授权已于 {expiry} 过期，请续费',
-                                'expiry_date': str(expiry)
-                            })
+                # 检查当前设备是否已经绑定过
+                current_binding = next((b for b in bindings if b['machine_id'] == mid), None)
 
-                        print(f"♻️ 老设备验证通过: {mid}")
-                        return jsonify({
-                            'code': 200,
-                            'msg': '验证成功(老设备)',
-                            'expiry_date': str(expiry)
-                        })
-
-                # --- 步骤 C: 写入新设备 ---
-                if len(bindings) >= max_dev:
-                    print(f"⛔ 设备已满: {len(bindings)}/{max_dev}")
-                    return jsonify({'code': 403, 'msg': '设备数已满'})
-
-                # 计算过期时间
-                expiry = None
-                if bindings:
-                    # 如果有旧的绑定记录，沿用旧的过期时间
-                    expiry = bindings[0]['expiry_date']
-
-                    # 检查是否已经过期
+                if current_binding:
+                    # 设备已存在，检查有效期
+                    expiry = current_binding['expiry_date']
                     if expiry and datetime.now() > expiry:
-                        print(f"🚫 卡密已过期，禁止新设备绑定: {expiry}")
-                        return jsonify({
-                            'code': 403,
-                            'msg': f'该卡密已于 {expiry} 过期，无法激活新设备',
-                            'expiry_date': str(expiry)
-                        })
-                else:
-                    # 如果是全新的卡，生成新的过期时间 (3650天≈10年)
-                    expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
+                        return jsonify({'code': 403, 'msg': '授权已过期'})
+                    return jsonify({'code': 200, 'msg': '验证通过', 'expiry_date': str(expiry)})
 
-                # 写入 SQL
-                sql = """
-                    INSERT INTO license_bindings 
-                    (card_key, machine_id, raw_key, activation_time, status, expiry_date) 
-                    VALUES (%s, %s, %s, NOW(), 'active', %s)
-                """
-                cursor.execute(sql, (key, mid, raw, expiry))
+                # --- 步骤 3: 新设备绑定与数量控制 ---
+                if len(bindings) >= max_allowed:
+                    return jsonify({'code': 403, 'msg': f'授权失败：该卡密仅支持 {max_allowed} 台设备'})
 
-                # 强制提交事务
+                # 如果是该卡的第一台设备，设置有效期（或从卡密表获取）
+                new_expiry = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d %H:%M:%S")
+
+                # 插入绑定记录
+                insert_sql = """
+                        INSERT INTO license_bindings 
+                        (card_key, machine_id, activation_time, status, expiry_date) 
+                        VALUES (%s, %s, NOW(), 'active', %s)
+                    """
+                cursor.execute(insert_sql, (client_key, mid, new_expiry))
                 conn.commit()
-                print("🎉🎉🎉 数据库写入成功！(Commit Done) 🎉🎉🎉")
 
-                return jsonify({
-                    'code': 200,
-                    'msg': '激活成功',
-                    'expiry_date': str(expiry)
-                })
-
+                return jsonify({'code': 200, 'msg': '新设备激活成功', 'expiry_date': str(new_expiry)})
         finally:
             conn.close()
-
     except Exception as e:
-        print(f"❌ 验证报错: {e}")
-        return jsonify({'code': 500, 'msg': f'服务器错误: {str(e)}'}), 500
+        return jsonify({'code': 500, 'msg': str(e)}), 500
 
 
 if __name__ == '__main__':
