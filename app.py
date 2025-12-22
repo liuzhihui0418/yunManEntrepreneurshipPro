@@ -280,10 +280,16 @@ def verify_license_db():
                 current_binding = next((b for b in bindings if b['machine_id'] == mid), None)
 
                 if current_binding:
-                    # 设备已存在，检查有效期
+                    # ✅ 新增：校验该设备的绑定状态是否为 active
+                    # 如果你在后台把某个特定的设备 status 改成了 'banned'，这里就能拦截
+                    if current_binding.get('status') != 'active':
+                        return jsonify({'code': 403, 'msg': '该设备授权已被禁用'})
+
+                    # 设备已存在且状态正常，检查有效期
                     expiry = current_binding['expiry_date']
                     if expiry and datetime.now() > expiry:
                         return jsonify({'code': 403, 'msg': '授权已过期'})
+
                     return jsonify({'code': 200, 'msg': '验证通过', 'expiry_date': str(expiry)})
 
                 # --- 步骤 3: 新设备绑定与数量控制 ---
