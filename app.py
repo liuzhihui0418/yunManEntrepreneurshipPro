@@ -291,7 +291,7 @@ def verify_license_db():
                     return jsonify({'code': 403, 'msg': f'授权失败：该卡密仅支持 {max_allowed} 台设备'})
 
                 # 如果是该卡的第一台设备，设置有效期（或从卡密表获取）
-                new_expiry = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d %H:%M:%S")
+                new_expiry = (datetime.now() + timedelta(days=3650)).strftime("%Y-%m-%d %H:%M:%S")
 
                 # 插入绑定记录
                 insert_sql = """
