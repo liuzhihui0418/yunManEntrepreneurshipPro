@@ -142,20 +142,24 @@ def create_order():
         out_trade_no = f"ORD_{int(time.time())}_{uuid.uuid4().hex[:4].upper()}"
         alipay = get_alipay_client()
 
-        # 电脑网站支付模式 (或者用 precreate 扫码模式)
+        # 调用支付宝预下单接口
         order_res = alipay.api_alipay_trade_precreate(
             out_trade_no=out_trade_no,
             total_amount=str(price),
             subject=f"算力充值-{face_value}元"
         )
 
+        # --- 🔍 修改点：增加错误日志打印 ---
         qr_code = order_res.get("qr_code")
         if not qr_code:
-            return jsonify({'code': 500, 'msg': '无法生成支付二维码，请检查密钥配置'})
+            print("❌ 支付宝下单失败，返回详情:", order_res)  # 看控制台这个输出！
+            # 把具体错误返回给前端，方便调试
+            error_msg = order_res.get('sub_msg', order_res.get('msg', '未知错误'))
+            return jsonify({'code': 500, 'msg': f'支付宝拒绝：{error_msg}'})
 
         return jsonify({'code': 200, 'qr_url': qr_code, 'order_no': out_trade_no})
     except Exception as e:
-        print(f"创建订单失败: {e}")
+        print(f"❌ 系统报错: {e}")
         return jsonify({'code': 500, 'msg': str(e)})
 
 
