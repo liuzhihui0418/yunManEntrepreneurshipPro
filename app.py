@@ -283,6 +283,29 @@ def verify_license_db():
         return jsonify({'code': 500, 'msg': f"服务器错误: {str(e)}"}), 500
 
 
+# ==========================================
+# 新增：实时库存查询接口
+# ==========================================
+@app.route('/api/inventory/stocks', methods=['GET'])
+def get_realtime_stocks():
+    """获取所有面额的实时库存数量"""
+    conn = pymysql.connect(**MYSQL_CONF)
+    try:
+        with conn.cursor() as cursor:
+            # 统计每个面额下状态为 0 (未售出) 的数量
+            sql = "SELECT face_value, COUNT(*) as count FROM compute_keys WHERE status = 0 GROUP BY face_value"
+            cursor.execute(sql)
+            results = cursor.fetchall()
+
+            # 将结果转为字典格式 {50: 12, 100: 5, ...}
+            stock_map = {row['face_value']: row['count'] for row in results}
+            return jsonify({'code': 200, 'stocks': stock_map})
+    except Exception as e:
+        return jsonify({'code': 500, 'msg': str(e)})
+    finally:
+        conn.close()
+
+
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
     data = request.get_json()
