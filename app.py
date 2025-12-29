@@ -7,7 +7,7 @@ import pymysql
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect
-from flask_cors import CORS
+
 from pymysql.cursors import DictCursor
 from alipay import AliPay
 
@@ -15,8 +15,35 @@ from alipay import AliPay
 from db.redis_manager import redis_manager
 from db.database import db_manager
 
+# main.py 顶部修改
+# --- main.py 顶部修改 ---
+
+# --- main.py 顶部全量替换 ---
+from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, make_response
+from flask_cors import CORS
+
 app = Flask(__name__, static_folder='static', template_folder='templates')
-CORS(app)
+
+# 1. 允许所有来源跨域
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
+
+# 2. 核心：处理浏览器的 OPTIONS 预检请求
+@app.before_request
+def handle_options_preflight():
+    if request.method == "OPTIONS":
+        res = make_response()
+        res.headers["Access-Control-Allow-Origin"] = "*"
+        res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+        res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        return res
+
+# 3. 核心：确保所有返回都带上跨域头（即使是 500 错误）
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # ==========================================
 # 1. 全局配置与密钥 (直接写在这里，防止引入报错)
@@ -142,11 +169,12 @@ def create_order():
         out_trade_no = f"ORD_{int(time.time())}_{uuid.uuid4().hex[:4].upper()}"
         alipay = get_alipay_client()
 
-        # 调用支付宝预下单接口
+        # 修改后
         order_res = alipay.api_alipay_trade_precreate(
             out_trade_no=out_trade_no,
             total_amount=str(price),
-            subject=f"算力充值-{face_value}元"
+            subject=f"算力充值-{face_value}元",
+            timeout_express="10m"  # 👈 加上这一行
         )
 
         # --- 🔍 修改点：增加错误日志打印 ---
@@ -214,6 +242,97 @@ def check_pay_status(order_no):
                 return jsonify({'paid': True, 'card_key': res['card_key']})
     finally:
         conn.close()
+    return jsonify({'paid': False})
+
+
+# ================= 🍌 Banana 支付核心接口 =================
+
+@app.route('/api/banana_pay/create', methods=['POST'])
+def banana_create_order():
+    """下单接口"""
+    try:
+        data = request.get_json()
+        price = data.get('price')
+        # 生成独立订单号
+        out_trade_no = f"BANANA_{int(time.time())}_{uuid.uuid4().hex[:4].upper()}"
+
+        alipay = get_alipay_client()
+        # 修改后
+        order_res = alipay.api_alipay_trade_precreate(
+            out_trade_no=out_trade_no,
+            total_amount=str(price),
+            subject=f"YunManGongFangAI网页登录月卡-{price}元",
+            notify_url="http://139.199.176.16:5000/api/banana_pay/notify",
+            timeout_express="10m"  # 👈 加上这一行
+        )
+        qr_code = order_res.get("qr_code")
+        if not qr_code: return jsonify({'code': 500, 'msg': '支付宝下单失败'})
+        return jsonify({'code': 200, 'qr_url': qr_code, 'order_no': out_trade_no})
+    except Exception as e:
+        return jsonify({'code': 500, 'msg': str(e)})
+
+
+@app.route('/api/banana_pay/notify', methods=['POST'])
+def banana_pay_notify():
+    """异步回调发货接口"""
+    try:
+        data = request.form.to_dict()
+        signature = data.pop("sign", None)
+        if not signature:
+            return "fail"
+
+        alipay = get_alipay_client()
+        if alipay.verify(data, signature):
+            trade_status = data.get("trade_status")
+            if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
+                order_no = data.get("out_trade_no")
+                amount = data.get("total_amount")
+
+                # 连接数据库进行发货
+                conn = pymysql.connect(**MYSQL_CONF)
+                try:
+                    with conn.cursor() as cursor:
+                        # 1. 锁定一张对应面值的库存卡密 (status=0表示未售出)
+                        sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 AND price_tag=%s LIMIT 1 FOR UPDATE"
+                        cursor.execute(sql_select, (amount,))
+                        card = cursor.fetchone()
+
+                        if card:
+                            # 2. 更新这张卡密的状态为已售出(status=1)，并记录订单号
+                            sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
+                            cursor.execute(sql_update, (order_no, card['id']))
+                            conn.commit()
+                            print(f"🚀 Banana发货成功: 订单 {order_no} -> 卡密 {card['card_key']}")
+                        else:
+                            print(f"⚠️ Banana库存不足: 无法为金额 {amount} 发货")
+                finally:
+                    conn.close()
+                return "success"
+    except Exception as e:
+        print(f"❌ 回调处理崩溃: {e}")
+    return "fail"
+
+
+@app.route('/api/banana_pay/status/<order_no>', methods=['GET'])
+def banana_check_status(order_no):
+    """状态查询接口 - 增加异常拦截，确保数据库断开时不崩溃"""
+    try:
+        conn = pymysql.connect(**MYSQL_CONF)
+        try:
+            with conn.cursor() as cursor:
+                # 查询这个订单号是否已经成功绑定了卡密 (status=1)
+                sql = "SELECT card_key FROM banana_key_inventory WHERE order_no = %s AND status = 1"
+                cursor.execute(sql, (order_no,))
+                res = cursor.fetchone()
+                if res:
+                    return jsonify({'paid': True, 'card_key': res['card_key']})
+        finally:
+            conn.close()
+    except Exception as e:
+        # 如果数据库连接失败(WinError 10061)，只打印警告而不抛出异常
+        print(f"📢 数据库状态查询暂不可用: {e}")
+
+    # 如果没查到或者数据库报错，统一返回 False，前端会继续等
     return jsonify({'paid': False})
 
 
@@ -401,6 +520,15 @@ def admin_login_page(): return render_template('admin_login.html')
 @app.route('/admin/codes', methods=['GET'])
 def get_codes_list():
     return jsonify({'success': True, 'codes': db_manager.get_all_codes()})
+
+
+# ==========================================
+# 新增路由：风格角色库页面
+# ==========================================
+@app.route('/style_library')
+def style_library_page():
+    # 这里不需要加 .html 后缀，Flask 会自动去 templates 文件夹找
+    return render_template('style_library.html')
 
 
 if __name__ == '__main__':

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YunManGongFangAI 风格角色库</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {cyan: {900: '#164e63'}},
+                    animation: {
+                        'pulse-slow': 'pulse 6s ease-in-out infinite',
+                        'text-flow': 'textFlow 3s linear infinite',
+                        'scan': 'scan 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+                        'scan-x': 'scanX 2s linear infinite',
+                        'slide-up': 'slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                        'spin-slow': 'spin 8s linear infinite'
+                    },
+                    keyframes: {
+                        textFlow: {'0%': {backgroundPosition: '0% 50%'}, '100%': {backgroundPosition: '200% 50%'}},
+                        scan: {
+                            '0%': {transform: 'translateY(-100%)', opacity: '0'},
+                            '20%': {opacity: '1'},
+                            '100%': {transform: 'translateY(500%)', opacity: '0'}
+                        },
+                        scanX: {'0%': {transform: 'translateX(-100%)'}, '100%': {transform: 'translateX(100%)'}},
+                        slideUp: {
+                            '0%': {opacity: '0', transform: 'translateY(30px) scale(0.95)'},
+                            '100%': {opacity: '1', transform: 'translateY(0) scale(1)'}
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #020204;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #08080c;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #00d1a0;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .stroke-text {
+            -webkit-text-stroke: 1px rgba(255, 255, 255, 0.1);
+            color: transparent;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-100 h-screen w-screen flex flex-col animate-fade-in">
+
+<div class="absolute inset-0 z-0 pointer-events-none">
+    <div class="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#00d1a0]/10 blur-[150px] animate-pulse-slow"></div>
+    <div class="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-900/10 blur-[150px] animate-pulse-slow delay-1000"></div>
+    <div class="absolute inset-0 bg-[linear-gradient(rgba(0,209,160,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,209,160,0.03)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
+</div>
+
+<header class="h-24 px-8 flex items-center justify-between z-20 border-b border-[#00d1a0]/10 bg-[#0a0a0a]/90 backdrop-blur-md relative shrink-0">
+    <div class="flex items-center gap-6">
+        <div class="relative p-2.5 rounded-xl border border-[#00d1a0]/30 bg-[#00d1a0]/5 overflow-hidden group shadow-[0_0_20px_rgba(0,209,160,0.1)]">
+            <i data-lucide="users" class="w-7 h-7 text-[#00d1a0] relative z-10"></i>
+        </div>
+        <div>
+            <h1 class="text-3xl font-black italic tracking-wide text-white">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#00ffc3] to-white animate-text-flow bg-[length:200%_auto]">YunManGongFangAI 风格角色库</span>
+            </h1>
+            <p class="text-xs text-gray-500 font-bold tracking-[0.3em] uppercase mt-1">Character Style Library</p>
+        </div>
+    </div>
+
+    <div class="flex items-center gap-6">
+        <div class="relative group w-72 hidden lg:block">
+            <i data-lucide="search"
+               class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-[#00d1a0]"></i>
+            <input id="search-input" type="text" placeholder="检索角色档案..."
+                   class="w-full bg-[#15151a] font-bold text-gray-300 text-sm rounded-xl border border-white/10 pl-11 pr-4 py-3 focus:outline-none focus:border-[#00d1a0] focus:bg-[#00d1a0]/5 transition-all">
+        </div>
+        <button onclick="window.history.back()"
+                class="group flex items-center gap-3 px-6 py-3 rounded-xl bg-white/5 border border-white/10 hover:border-[#00d1a0] transition-all duration-300 active:scale-95">
+            <span class="text-sm font-black text-gray-400 group-hover:text-[#00d1a0]">返回首页</span>
+            <i data-lucide="log-out" class="w-4 h-4 text-gray-500 group-hover:text-[#00d1a0]"></i>
+        </button>
+    </div>
+</header>
+
+<main class="flex-1 overflow-y-auto p-10 z-10 custom-scroll relative">
+    <div class="w-full mb-8 overflow-x-auto no-scrollbar pb-2">
+        <div id="category-tabs" class="flex items-center justify-center gap-4 min-w-full">
+        </div>
+    </div>
+
+    <div class="mb-10 flex items-end justify-between">
+        <div>
+            <h2 class="text-4xl font-black text-white mb-2 tracking-tight flex items-center gap-3">
+                <span class="w-2 h-8 bg-[#00d1a0] skew-x-[-15deg]"></span>
+                风格角色档案库
+            </h2>
+            <p class="text-gray-500 text-sm font-bold tracking-wide pl-5">
+                当前选中分类：<span id="current-label" class="text-[#00d1a0]">古风角色</span>
+            </p>
+        </div>
+        <button onclick="loadData()"
+                class="group relative flex items-center gap-3 px-8 py-3.5 bg-transparent border border-[#00d1a0]/50 rounded-lg hover:border-[#00d1a0] hover:shadow-[0_0_30px_rgba(0,209,160,0.3)] active:scale-95 transition-all">
+            <i data-lucide="refresh-cw" class="w-5 h-5 text-[#00d1a0]"></i>
+            <span class="font-black tracking-wider text-[#00d1a0]">刷新列表</span>
+        </button>
+    </div>
+
+    <div id="grid-container"
+         class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8 pb-10">
+    </div>
+
+    <div id="pagination-bar" class="flex items-center justify-center gap-4 pb-20 mt-10 hidden">
+        <div class="flex items-center gap-2 p-1.5 bg-[#101014] border border-white/5 rounded-xl shadow-2xl backdrop-blur-md">
+            <button onclick="changePage(-1)" id="prev-btn"
+                    class="p-2 rounded-lg hover:bg-white/5 disabled:opacity-20 text-gray-400 hover:text-[#00d1a0] transition-all">
+                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+            </button>
+            <div class="flex items-center gap-3 px-4 py-1.5 bg-black/40 rounded-lg border border-white/5">
+                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Page</span>
+                <input type="number" id="jump-input"
+                       class="w-10 bg-transparent text-center text-[#00ffc3] font-mono font-bold border-b border-[#00d1a0]/30 outline-none">
+                <span class="text-gray-600">/</span>
+                <span id="total-pages" class="text-sm font-bold text-gray-400">1</span>
+            </div>
+            <button onclick="changePage(1)" id="next-btn"
+                    class="p-2 rounded-lg hover:bg-white/5 disabled:opacity-20 text-gray-400 hover:text-[#00d1a0] transition-all">
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </button>
+            <button onclick="handleJump()"
+                    class="ml-2 px-4 py-2 bg-[#00d1a0]/10 hover:bg-[#00d1a0] text-[#00d1a0] hover:text-black text-[10px] font-black rounded-lg border border-[#00d1a0]/20 transition-all uppercase tracking-tighter">
+                Go
+            </button>
+        </div>
+    </div>
+
+    <div id="empty-state" class="hidden h-96 flex flex-col items-center justify-center text-gray-700">
+        <div class="w-24 h-24 rounded-full border-4 border-dashed border-gray-800 flex items-center justify-center mb-6 animate-spin-slow">
+            <i data-lucide="search-x" class="w-10 h-10 opacity-30"></i>
+        </div>
+        <p class="text-sm tracking-[0.5em] font-black opacity-40 uppercase">System Empty / No Data</p>
+    </div>
+</main>
+
+<div id="edit-modal" class="fixed inset-0 z-[200] flex items-center justify-center pointer-events-auto hidden">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeModal()"></div>
+    <div class="relative w-[520px] max-h-[90vh] flex flex-col bg-[#050508] rounded-xl overflow-hidden shadow-[0_0_50px_rgba(0,209,160,0.15)] border border-[#00d1a0]/30 animate-slide-up group/modal">
+        <div class="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#00d1a0] to-transparent animate-scan-x z-20"></div>
+
+        <div class="relative h-16 shrink-0 flex items-center justify-between px-6 border-b border-white/5 bg-[#0a0a0f] z-10">
+            <div class="absolute inset-0 opacity-10 bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,#00d1a0_5px,#00d1a0_6px)]"></div>
+            <div class="flex items-center gap-3 relative z-10">
+                <div class="w-1 h-6 bg-[#00d1a0] shadow-[0_0_10px_#00d1a0]"></div>
+                <h3 class="text-2xl font-black italic tracking-widest uppercase">
+                    <span class="bg-gradient-to-r from-[#00d1a0] via-[#ffffff] to-[#00d1a0] bg-[length:200%_auto] bg-clip-text text-transparent animate-text-flow">角色风格档案详情</span>
+                </h3>
+            </div>
+            <button onclick="closeModal()"
+                    class="relative z-10 w-8 h-8 flex items-center justify-center rounded bg-white/5 hover:bg-[#00d1a0] hover:text-black text-gray-400 transition-all">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scroll bg-[#08080a]">
+            <div>
+                <label class="block text-[14px] font-black text-[#00d1a0]/70 mb-1.5 tracking-widest uppercase">Category
+                    / 所属分类</label>
+                <div id="modal-category"
+                     class="w-full bg-[#101014] text-[#00ffc3] font-bold text-base px-4 py-3 border border-white/10 rounded-sm opacity-90"></div>
+            </div>
+
+            <div class="grid grid-cols-12 gap-4">
+                <div class="col-span-4">
+                    <label class="block text-[14px] font-black text-[#00d1a0]/70 mb-1.5 tracking-widest uppercase">Tag /
+                        标签</label>
+                    <div id="modal-tag"
+                         class="w-full min-h-[44px] max-h-[80px] overflow-y-auto bg-[#101014] text-white font-bold text-base px-3 py-2.5 border-b-2 border-[#00d1a0]/30 break-all custom-scroll"></div>
+                </div>
+                <div class="col-span-8">
+                    <label class="block text-[14px] font-black text-[#00d1a0]/70 mb-1.5 tracking-widest uppercase">Identity
+                        / 角色ID</label>
+                    <div id="modal-name"
+                         class="w-full min-h-[44px] max-h-[80px] overflow-y-auto bg-[#101014] text-[#00ffc3] font-bold text-base px-4 py-2.5 border border-white/10 rounded-sm break-all custom-scroll"></div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-[14px] font-black text-[#00d1a0]/70 mb-1.5 tracking-widest uppercase">Traits /
+                    角色描述</label>
+                <div id="modal-desc"
+                     class="w-full h-32 overflow-y-auto bg-[#101014] border border-white/10 p-4 text-base text-gray-300 font-bold whitespace-pre-wrap break-all rounded-sm custom-scroll shadow-inner"></div>
+            </div>
+
+            <div>
+                <label class="block text-center text-[12px] font-black text-gray-600 mb-3 tracking-[0.3em] uppercase">Visual
+                    Preview</label>
+                <div class="grid grid-cols-2 gap-4" id="modal-media-grid">
+                </div>
+            </div>
+        </div>
+        <div class="p-6 bg-[#08080a] border-t border-white/5">
+            <button onclick="closeModal()"
+                    class="w-full h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-sm text-gray-400 font-black tracking-widest active:scale-95 transition-all">
+                关闭详情页
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="preview-overlay"
+     class="fixed inset-0 z-[300] bg-black/95 backdrop-blur-xl flex items-center justify-center animate-fade-in hidden"
+     onclick="closePreview()">
+    <button class="absolute top-8 right-8 p-3 bg-white/10 hover:bg-red-500 rounded-full text-white transition-all z-50">
+        <i data-lucide="x" class="w-8 h-8"></i></button>
+    <div id="preview-content" class="relative max-w-[90vw] max-h-[90vh]" onclick="event.stopPropagation()">
+    </div>
+</div>
+
+<script>
+    const API_BASE = "http://127.0.0.1:8000/api";
+    const categories = [
+        {label: '古风角色', value: 'ancient'},
+        {label: '都市角色', value: 'urban'},
+        {label: '末日角色', value: 'wasteland'},
+        {label: '修仙角色', value: 'cultivation'},
+        {label: '灵异角色', value: 'cyberpunk'},
+        {label: '其他角色', value: 'default'}
+    ];
+
+    let charList = [];
+    let currentCategory = 'ancient';
+    let searchQuery = '';
+    let currentPage = 1;
+    const pageSize = 12;
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTabs();
+        loadData();
+
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            currentPage = 1;
+            renderAll();
+        });
+
+        document.getElementById('jump-input').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') handleJump();
+        });
+    });
+
+    function renderTabs() {
+        const container = document.getElementById('category-tabs');
+        container.innerHTML = categories.map(cat => `
+            <button onclick="switchCategory('${cat.value}')"
+                    class="px-6 py-3 rounded-lg text-sm font-black tracking-widest transition-all border shrink-0
+                    ${currentCategory === cat.value ? 'bg-[#00d1a0] text-black border-[#00d1a0] shadow-[0_0_20px_rgba(0,209,160,0.4)] scale-105' : 'bg-[#15151a] text-gray-400 border-white/10 hover:text-white hover:bg-white/5'}">
+                ${cat.label}
+            </button>
+        `).join('');
+    }
+
+    async function loadData() {
+        try {
+            const res = await fetch(`${API_BASE}/character/list?project_name=${currentCategory}`);
+            const json = await res.json();
+            if (json.status === 'success') {
+                charList = json.data || [];
+                currentPage = 1;
+                renderAll();
+            }
+        } catch (e) {
+            console.error("加载数据失败:", e);
+        }
+    }
+
+    function switchCategory(val) {
+        currentCategory = val;
+        document.getElementById('current-label').innerText = categories.find(c => c.value === val).label;
+        currentPage = 1;
+        renderTabs();
+        loadData();
+    }
+
+    function renderAll() {
+        const grid = document.getElementById('grid-container');
+        const empty = document.getElementById('empty-state');
+        const pagBar = document.getElementById('pagination-bar');
+
+        const filtered = charList.filter(item =>
+                (item.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (item.label || '').toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        const total = Math.max(1, Math.ceil(filtered.length / pageSize));
+        const start = (currentPage - 1) * pageSize;
+        const pageData = filtered.slice(start, start + pageSize);
+
+        grid.innerHTML = pageData.map(char => {
+            const safeChar = JSON.stringify(char).replace(/"/g, '&quot;');
+            return `
+            <div class="group relative aspect-[3/4] bg-[#101014] rounded-2xl border border-white/5 cursor-pointer transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_20px_60px_-15px_rgba(0,209,160,0.2)]">
+                <div class="absolute inset-0 rounded-2xl border-2 border-[#00d1a0]/0 group-hover:border-[#00d1a0] z-20 pointer-events-none transition-all duration-300"></div>
+                <div class="absolute inset-1.5 overflow-hidden rounded-xl bg-[#050508]">
+                    ${char.image ? `<img src="${char.image}" class="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700 ease-out">` :
+                    char.video ? `<video src="${char.video}" class="w-full h-full object-cover opacity-60 group-hover:opacity-100" muted loop autoplay playsinline></video>` :
+                    `<div class="w-full h-full flex flex-col items-center justify-center text-gray-800 font-black bg-[#08080c]"><span class="text-xl">?</span></div>`}
+                    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-[#00d1a0]/30 to-transparent h-[30%] w-full -translate-y-full group-hover:animate-scan z-10 pointer-events-none mix-blend-overlay"></div>
+                    <div class="absolute bottom-0 left-0 right-0 h-4/5 bg-gradient-to-t from-[#08080c] via-[#08080c]/90 to-transparent opacity-100"></div>
+                </div>
+                <div class="absolute bottom-5 left-5 right-5 z-30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-black text-[#00d1a0] border border-[#00d1a0]/30 px-2 py-0.5 rounded bg-[#00d1a0]/10 tracking-widest uppercase">${char.label || 'TAG'}</span>
+                        <div class="w-2 h-2 rounded-full bg-[#00ffc3] shadow-[0_0_10px_#00ffc3] animate-pulse"></div>
+                    </div>
+                    <h3 class="text-white font-black text-xl truncate tracking-wide group-hover:text-[#00ffc3] transition-colors duration-300">${char.name}</h3>
+                    <p class="text-xs text-gray-500 mt-1 truncate font-bold group-hover:text-gray-400 transition-colors">${char.desc || 'No Data...'}</p>
+                    <div class="grid grid-cols-4 gap-2 mt-0 h-0 opacity-0 group-hover:h-auto group-hover:opacity-100 group-hover:mt-4 transition-all duration-300 overflow-hidden">
+                        <button onclick='openModal(${safeChar})' class="col-span-3 py-2 rounded bg-white/10 hover:bg-[#00d1a0] hover:text-black text-white text-xs font-black tracking-widest transition-all">VIEW DATA</button>
+                        <button onclick="deleteChar(${char.id})" class="col-span-1 flex items-center justify-center rounded bg-white/10 hover:bg-red-500 hover:text-white text-white transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        document.getElementById('total-pages').innerText = total;
+        document.getElementById('jump-input').value = currentPage;
+        document.getElementById('prev-btn').disabled = (currentPage === 1);
+        document.getElementById('next-btn').disabled = (currentPage === total);
+
+        filtered.length === 0 ? empty.classList.remove('hidden') : empty.classList.add('hidden');
+        total > 1 ? pagBar.classList.remove('hidden') : pagBar.classList.add('hidden');
+
+        lucide.createIcons();
+    }
+
+    function changePage(step) {
+        currentPage += step;
+        renderAll();
+        document.querySelector('main').scrollTop = 0;
+    }
+
+    function handleJump() {
+        const val = parseInt(document.getElementById('jump-input').value);
+        const total = parseInt(document.getElementById('total-pages').innerText);
+        if (val >= 1 && val <= total) {
+            currentPage = val;
+            renderAll();
+            document.querySelector('main').scrollTop = 0;
+        }
+    }
+
+    // 详情弹窗逻辑
+    function openModal(data) {
+        document.getElementById('edit-modal').classList.remove('hidden');
+        document.getElementById('modal-category').innerText = categories.find(c => c.value === (data.project_name || currentCategory))?.label || '未知分类';
+        document.getElementById('modal-tag').innerText = data.label || 'TAG';
+        document.getElementById('modal-name').innerText = data.name;
+        document.getElementById('modal-desc').innerText = data.desc || '暂无描述数据...';
+
+        const mediaGrid = document.getElementById('modal-media-grid');
+        mediaGrid.innerHTML = `
+            <div class="relative h-36 rounded bg-[#0c0c10] border border-white/5 overflow-hidden group/media">
+                ${data.image ? `<img src="${data.image}" class="w-full h-full object-cover">
+                <div onclick="triggerPreview('image', '${data.image}')" class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/media:opacity-100 transition-all cursor-pointer">
+                <div class="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:text-[#00ffc3]"><i data-lucide="search" class="w-6 h-6"></i></div>
+                </div>` : '<div class="w-full h-full flex items-center justify-center text-gray-800 text-[10px]">NO IMAGE</div>'}
+            </div>
+            <div class="relative h-36 rounded bg-[#0c0c10] border border-white/5 overflow-hidden group/media">
+                ${data.video ? `<video src="${data.video}" class="w-full h-full object-cover" muted loop autoplay></video>
+                <div onclick="triggerPreview('video', '${data.video}')" class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/media:opacity-100 transition-all cursor-pointer">
+                <div class="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:text-[#00ffc3]"><i data-lucide="clapperboard" class="w-6 h-6"></i></div>
+                </div>` : '<div class="w-full h-full flex items-center justify-center text-gray-800 text-[10px]">NO VIDEO</div>'}
+            </div>
+        `;
+        lucide.createIcons();
+    }
+
+    function closeModal() {
+        document.getElementById('edit-modal').classList.add('hidden');
+    }
+
+    // 预览逻辑
+    function triggerPreview(type, url) {
+        const overlay = document.getElementById('preview-overlay');
+        const content = document.getElementById('preview-content');
+        overlay.classList.remove('hidden');
+        if (type === 'image') {
+            content.innerHTML = `<img src="${url}" class="max-w-full max-h-[90vh] object-contain rounded shadow-2xl border border-white/10">`;
+        } else {
+            content.innerHTML = `
+                <div class="relative rounded overflow-hidden shadow-2xl border border-white/10">
+                    <video src="${url}" class="max-w-full max-h-[85vh] object-contain" controls autoplay></video>
+                    <div class="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur rounded text-[#00ffc3] font-bold text-xs border border-[#00ffc3]/30">YunManGongFangAI Player</div>
+                </div>`;
+        }
+        lucide.createIcons();
+    }
+
+    function closePreview() {
+        document.getElementById('preview-overlay').classList.add('hidden');
+    }
+
+    async function deleteChar(id) {
+        const password = prompt('请输入管理员删除口令：');
+        if (!password) return;
+        if (!confirm('警告：确认要永久删除该记录吗？')) return;
+        try {
+            const res = await fetch(`${API_BASE}/character/delete`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-Admin-Token': password},
+                body: JSON.stringify({id: id})
+            });
+            const result = await res.json();
+            if (result.success) {
+                alert("删除成功");
+                charList = charList.filter(c => c.id !== id);
+                renderAll();
+            } else {
+                alert(result.msg);
+            }
+        } catch (e) {
+            alert("网络错误");
+        }
+    }
+</script>
+</body>
+</html>

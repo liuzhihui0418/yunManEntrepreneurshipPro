@@ -4,11 +4,10 @@ from dbutils.pooled_db import PooledDB
 import datetime
 import uuid
 
-
-# 【注意】这里绝对不要导入 redis_manager，否则报错！
-
+# 数据库管理器类
 class DatabaseManager:
     def __init__(self):
+        # 数据库配置
         self.db_config = {
             'host': '127.0.0.1',
             'port': 3306,
@@ -34,14 +33,12 @@ class DatabaseManager:
         if not self.pool: self._init_pool()
         return self.pool.connection()
 
-    # ================= 辅助优化方法 (新增) =================
+    # ================= 辅助优化方法 =================
     def _get_cached_count(self, cache_key, sql_query, params=None):
         """
-        通用计数缓存方法：
-        解决远程数据库 COUNT(*) 慢的问题。
-        逻辑：先查 Redis，有就返回；没有就查数据库并存入 Redis 10分钟。
+        通用计数缓存方法
         """
-        # 【局部导入】解决循环引用
+        # 【修复 1/6】加上 db. 前缀
         from db.redis_manager import redis_manager
 
         try:
@@ -55,20 +52,22 @@ class DatabaseManager:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(sql_query, params)
-                # 兼容不同的返回格式
                 row = cursor.fetchone()
                 if isinstance(row, dict):
                     count = list(row.values())[0]
                 else:
                     count = row[0]
 
-                # 写入缓存，有效期 600秒 (10分钟)
-                redis_manager.r.setex(cache_key, 600, count)
+                # 写入缓存，有效期 600秒
+                try:
+                    redis_manager.r.setex(cache_key, 600, count)
+                except:
+                    pass
                 return count
         finally:
             conn.close()
 
-    # ================= 原有基础方法 (保留) =================
+    # ================= 原有基础方法 =================
 
     def get_all_active_codes(self):
         conn = self.get_connection()
@@ -103,7 +102,7 @@ class DatabaseManager:
     # ================= 业务方法 (优化) =================
 
     def create_invite_code(self, code, days, note=""):
-        # 【局部导入】
+        # 【修复 2/6】加上 db. 前缀
         from db.redis_manager import redis_manager
 
         conn = self.get_connection()
@@ -117,7 +116,6 @@ class DatabaseManager:
                 cursor.execute(sql, (code, expires_at, note))
                 conn.commit()
 
-                # 【优化】创建成功后，删除总数缓存，保证列表页数据准确
                 try:
                     redis_manager.r.delete("admin:total_codes_count")
                 except:
@@ -130,8 +128,7 @@ class DatabaseManager:
             conn.close()
 
     def get_dashboard_stats(self):
-        """保留你原有的方法，仅修复导入"""
-        # 【局部导入】
+        # 【修复 3/6】加上 db. 前缀
         from db.redis_manager import redis_manager
 
         cache_key = "admin:dashboard_stats"
@@ -172,7 +169,10 @@ class DatabaseManager:
                         row['used_at'] = None
 
             result = {'stats': stats, 'usage_data': usage_data}
-            redis_manager.r.setex(cache_key, 30, json.dumps(result))
+            try:
+                redis_manager.r.setex(cache_key, 30, json.dumps(result))
+            except:
+                pass
             return result
 
         except Exception as e:
@@ -183,8 +183,7 @@ class DatabaseManager:
             conn.close()
 
     def get_all_codes(self):
-        """保留原有的全量查询方法，仅修复导入"""
-        # 【局部导入】
+        # 【修复 4/6】加上 db. 前缀
         from db.redis_manager import redis_manager
 
         cache_key = "admin:codes_list"
@@ -220,8 +219,7 @@ class DatabaseManager:
     # ================= 分页方法 (集成进类并优化) =================
 
     def get_dashboard_stats_with_pagination(self, page=1, page_size=20):
-        """优化版：带分页的仪表盘数据查询"""
-        # 【局部导入】
+        # 【修复 5/6】加上 db. 前缀
         from db.redis_manager import redis_manager
 
         cache_key = f"admin:dashboard_stats_page_{page}_size_{page_size}"
@@ -238,15 +236,12 @@ class DatabaseManager:
 
         try:
             with conn.cursor(pymysql.cursors.DictCursor) as cursor:
-                # 统计信息 (这里还可以进一步优化，但先保持你的逻辑，只优化总数查询)
-
-                # 【优化点1】使用缓存的总数，避免每次都 COUNT(*)
+                # 统计信息
                 stats['total_codes'] = self._get_cached_count(
                     "admin:total_codes_count",
                     "SELECT COUNT(*) FROM invite_codes"
                 )
 
-                # 其他统计暂时保持实时查询 (也可以做缓存，但为了数据实时性先不动)
                 cursor.execute("SELECT COUNT(*) as c FROM invite_codes WHERE is_active = 1 AND current_uses > 0")
                 stats['active_users'] = cursor.fetchone()['c']
 
@@ -263,10 +258,8 @@ class DatabaseManager:
                                (page_size, offset))
                 usage_data = list(cursor.fetchall())
 
-                # 复用上面获取的 cached total
                 total_count = stats['total_codes']
 
-                # 时间序列化
                 for row in usage_data:
                     if row.get('created_at'): row['created_at'] = str(row['created_at'])
                     if row.get('expires_at'): row['expires_at'] = str(row['expires_at'])
@@ -299,8 +292,7 @@ class DatabaseManager:
             conn.close()
 
     def get_codes_with_pagination(self, page=1, page_size=20, search=None):
-        """优化版：带分页和搜索的邀请码查询"""
-        # 【局部导入】
+        # 【修复 6/6】加上 db. 前缀
         from db.redis_manager import redis_manager
 
         cache_key = f"admin:codes_list_page_{page}_size_{page_size}_search_{search or 'all'}"
@@ -323,8 +315,6 @@ class DatabaseManager:
 
                 where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
 
-                # 【优化点2】分离计数逻辑
-                # 如果是搜索，必须实时 Count；如果不是搜索，走缓存 Count
                 if search:
                     count_sql = f"SELECT COUNT(*) as total FROM invite_codes {where_clause}"
                     cursor.execute(count_sql, params)
@@ -335,10 +325,8 @@ class DatabaseManager:
                         "SELECT COUNT(*) FROM invite_codes"
                     )
 
-                # 分页数据
                 offset = (page - 1) * page_size
                 sql = f"SELECT * FROM invite_codes {where_clause} ORDER BY created_at DESC LIMIT %s OFFSET %s"
-                # 注意：params在这里需要加上 limit 和 offset
                 query_params = params + [page_size, offset]
 
                 cursor.execute(sql, query_params)
@@ -373,5 +361,5 @@ class DatabaseManager:
         finally:
             conn.close()
 
-
+# 实例化在最后
 db_manager = DatabaseManager()
