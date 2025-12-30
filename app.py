@@ -27,24 +27,6 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 # 1. 允许所有来源跨域
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
-# 2. 核心：处理浏览器的 OPTIONS 预检请求
-@app.before_request
-def handle_options_preflight():
-    if request.method == "OPTIONS":
-        res = make_response()
-        res.headers["Access-Control-Allow-Origin"] = "*"
-        res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
-        res.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
-        return res
-
-# 3. 核心：确保所有返回都带上跨域头（即使是 500 错误）
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
-
 # ==========================================
 # 1. 全局配置与密钥 (直接写在这里，防止引入报错)
 # ==========================================
