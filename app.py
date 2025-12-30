@@ -190,8 +190,9 @@ def pay_notify():
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
                     with conn.cursor() as cursor:
-                        # 锁定一张未使用的卡密
-                        cursor.execute("SELECT id, card_key FROM compute_keys WHERE status=0 LIMIT 1 FOR UPDATE")
+                        # 🚀 使用 CAST 将数据库和传入的金额都转为数字进行比较，彻底解决 0.9 != 0.90 问题
+                        sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 AND CAST(price_tag AS DECIMAL(10,2)) = CAST(%s AS DECIMAL(10,2)) LIMIT 1 FOR UPDATE"
+                        cursor.execute(sql_select, (amount,))
                         card = cursor.fetchone()
 
                         if card:

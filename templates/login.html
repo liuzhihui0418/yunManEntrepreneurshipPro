@@ -333,7 +333,11 @@
                             const finalKey = statusData.card_key;
 
                             // 替换支付框内容为卡密展示
-                            const payModalInner = document.querySelector('#payModal .relative.bg-[#0F0F13]');
+                            // 🚀 修正选择器：使用反斜杠转义中括号，或者改用更稳健的获取方式
+                            const payModalInner = document.querySelector('#payModal .relative.bg-\\[\\#0F0F13\\]');
+
+                            // 或者最保险的方法，直接根据层级找：
+                            // const payModalInner = document.querySelector('#payModal .relative.bg-black');
                             if (payModalInner) {
                                 payModalInner.innerHTML = `
                                                     <div class="flex flex-col items-center animate-fade-in-up">
