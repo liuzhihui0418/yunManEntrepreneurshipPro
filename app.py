@@ -351,7 +351,15 @@ def validate_invite_code():
             session_id = redis_manager.create_session(code)
             user_info = redis_manager.get_session_info(session_id)
             resp = jsonify({'success': True, 'session_id': session_id, 'user': user_info, 'message': '成功'})
-            resp.set_cookie('session_id', session_id, max_age=86400)
+            # 找到 validate_invite_code 函数中的 resp.set_cookie
+            resp.set_cookie(
+                'session_id',
+                session_id,
+                max_age=86400,
+                httponly=True,  # ✅ 彻底防止 XSS 攻击获取 Cookie
+                samesite='None',  # 🚀 彻底解决 CDN 转发导致的跨域丢失问题
+                secure=True  # 🔒 核心：强制要求仅在 HTTPS 下生效，解决“不安全”警告
+            )
             return resp
         return jsonify({'success': False, 'message': result['message']}), 401
     except Exception:
