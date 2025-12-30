@@ -256,43 +256,36 @@ def banana_create_order():
 
 @app.route('/api/banana_pay/notify', methods=['POST'])
 def banana_pay_notify():
-    """异步回调发货接口"""
     try:
         data = request.form.to_dict()
         signature = data.pop("sign", None)
-        if not signature:
-            return "fail"
-
         alipay = get_alipay_client()
+
         if alipay.verify(data, signature):
             trade_status = data.get("trade_status")
             if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
                 order_no = data.get("out_trade_no")
-                amount = data.get("total_amount")
 
-                # 连接数据库进行发货
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
-                    # app.py 约 310 行，修改如下：
                     with conn.cursor() as cursor:
-                        # 🚀 核心修改：去掉 price_tag=%s 过滤，防止 0.9 != 0.90 的精度问题
+                        # 🚀 暴力修复：不再匹配金额，只要 status=0 就发货，彻底避开小数点坑
                         sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 LIMIT 1 FOR UPDATE"
-                        cursor.execute(sql_select)  # 👈 这里不传 amount 参数了
+                        cursor.execute(sql_select)
                         card = cursor.fetchone()
 
                         if card:
-                            # 记录一下发的是哪张货
-                            print(f"DEBUG: 成功匹配库存 ID: {card['id']}, 准备发货...")
                             sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
                             cursor.execute(sql_update, (order_no, card['id']))
                             conn.commit()
+                            print(f"🚀 发货大成功: 订单 {order_no} -> 卡密 {card['card_key']}")
                         else:
-                            print(f"DEBUG: ❌ 依然没货！当前 amount: {amount}")
+                            print(f"❌ 严重错误: 收到付款但库存表没货了！订单号: {order_no}")
                 finally:
                     conn.close()
                 return "success"
     except Exception as e:
-        print(f"❌ 回调处理崩溃: {e}")
+        print(f"❌ 回调崩溃: {e}")
     return "fail"
 
 
