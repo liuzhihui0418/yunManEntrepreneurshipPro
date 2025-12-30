@@ -269,23 +269,25 @@ def banana_pay_notify():
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
                     with conn.cursor() as cursor:
-                        # 🚀 暴力修复：不再匹配金额，只要 status=0 就发货，彻底避开小数点坑
-                        sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 LIMIT 1 FOR UPDATE"
-                        cursor.execute(sql_select)
+                        # 🚀 暴力修复 1：先查出第一个可用的 ID
+                        cursor.execute(
+                            "SELECT id, card_key FROM banana_key_inventory WHERE status=0 LIMIT 1 FOR UPDATE")
                         card = cursor.fetchone()
 
                         if card:
+                            # 🚀 暴力修复 2：根据 ID 强制更新，确保状态变为 1
+                            card_id = card['id']
                             sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
-                            cursor.execute(sql_update, (order_no, card['id']))
+                            cursor.execute(sql_update, (order_no, card_id))
                             conn.commit()
-                            print(f"🚀 发货大成功: 订单 {order_no} -> 卡密 {card['card_key']}")
+                            print(f"✅ 发货成功！订单: {order_no} -> ID: {card_id}")
                         else:
-                            print(f"❌ 严重错误: 收到付款但库存表没货了！订单号: {order_no}")
+                            print(f"❌ 发货失败：库存表已空！订单号: {order_no}")
                 finally:
                     conn.close()
                 return "success"
     except Exception as e:
-        print(f"❌ 回调崩溃: {e}")
+        print(f"🔥 回调处理异常: {e}")
     return "fail"
 
 
