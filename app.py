@@ -273,20 +273,21 @@ def banana_pay_notify():
                 # 连接数据库进行发货
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
+                    # app.py 约 310 行，修改如下：
                     with conn.cursor() as cursor:
-                        # 1. 锁定一张对应面值的库存卡密 (status=0表示未售出)
-                        sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 AND price_tag=%s LIMIT 1 FOR UPDATE"
-                        cursor.execute(sql_select, (amount,))
+                        # 🚀 核心修改：去掉 price_tag=%s 过滤，防止 0.9 != 0.90 的精度问题
+                        sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 LIMIT 1 FOR UPDATE"
+                        cursor.execute(sql_select)  # 👈 这里不传 amount 参数了
                         card = cursor.fetchone()
 
                         if card:
-                            # 2. 更新这张卡密的状态为已售出(status=1)，并记录订单号
+                            # 记录一下发的是哪张货
+                            print(f"DEBUG: 成功匹配库存 ID: {card['id']}, 准备发货...")
                             sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
                             cursor.execute(sql_update, (order_no, card['id']))
                             conn.commit()
-                            print(f"🚀 Banana发货成功: 订单 {order_no} -> 卡密 {card['card_key']}")
                         else:
-                            print(f"⚠️ Banana库存不足: 无法为金额 {amount} 发货")
+                            print(f"DEBUG: ❌ 依然没货！当前 amount: {amount}")
                 finally:
                     conn.close()
                 return "success"
