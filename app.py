@@ -356,9 +356,9 @@ def validate_invite_code():
                 'session_id',
                 session_id,
                 max_age=86400,
-                httponly=True,  # ✅ 彻底防止 XSS 攻击获取 Cookie
-                samesite='None',  # 🚀 彻底解决 CDN 转发导致的跨域丢失问题
-                secure=True  # 🔒 核心：强制要求仅在 HTTPS 下生效，解决“不安全”警告
+                httponly=True,
+                samesite='Lax',  # 👈 从 'None' 改为 'Lax'
+                secure=False  # 👈 暂时改为 False，直到浏览器地址栏变绿
             )
             return resp
         return jsonify({'success': False, 'message': result['message']}), 401
