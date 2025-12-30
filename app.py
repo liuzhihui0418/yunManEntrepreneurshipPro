@@ -10,7 +10,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 
 from pymysql.cursors import DictCursor
 from alipay import AliPay
-from sympy.physics.units import amount
+
 
 # 引入项目现有的数据库管理器 (保持你原有的引用)
 from db.redis_manager import redis_manager
@@ -186,31 +186,31 @@ def pay_notify():
             trade_status = data.get("trade_status")
             if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
                 order_no = data.get("out_trade_no")
+                # 🚀 修正 1：从 data 中获取正确的金额变量名
+                pay_amount = data.get("total_amount")
 
-                # --- 发货逻辑 ---
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
                     with conn.cursor() as cursor:
-                        # 🚀 使用 CAST 将数据库和传入的金额都转为数字进行比较，彻底解决 0.9 != 0.90 问题
+                        # 🚀 修正 2：确保查询库存的变量名对应 pay_amount
                         sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 AND CAST(price_tag AS DECIMAL(10,2)) = CAST(%s AS DECIMAL(10,2)) LIMIT 1 FOR UPDATE"
-                        cursor.execute(sql_select, (amount,))
+                        cursor.execute(sql_select, (pay_amount,))
                         card = cursor.fetchone()
 
                         if card:
-                            cursor.execute(
-                                "UPDATE compute_keys SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s",
-                                (order_no, card['id'])
-                            )
+                            # 🚀 修正 3：确保更新的是同一个表 banana_key_inventory
+                            sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
+                            cursor.execute(sql_update, (order_no, card['id']))
                             conn.commit()
-                            print(f"发货成功: 订单 {order_no} -> 卡密 {card['card_key']}")
+                            print(f"✅ 发货成功: 订单 {order_no} -> 卡密 {card['card_key']}")
                         else:
-                            print("库存不足，无法发货")
+                            print(f"⚠️ 库存不足: 金额 {pay_amount} 无货")
                 finally:
                     conn.close()
                 return "success"
         return "fail"
     except Exception as e:
-        print(f"回调处理错误: {e}")
+        print(f"❌ 回调处理错误: {e}")
         return "fail"
 
 
@@ -258,38 +258,68 @@ def banana_create_order():
 
 @app.route('/api/banana_pay/notify', methods=['POST'])
 def banana_pay_notify():
+    """Banana 支付回调接口：负责精准金额匹配并发货"""
     try:
+        # 1. 获取支付宝 POST 过来的数据
         data = request.form.to_dict()
         signature = data.pop("sign", None)
         alipay = get_alipay_client()
 
+        # 2. 验证签名，确保回调来自支付宝
         if alipay.verify(data, signature):
             trade_status = data.get("trade_status")
-            if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
-                order_no = data.get("out_trade_no")
 
+            # 3. 只有支付成功才执行发货
+            if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
+                order_no = data.get("out_trade_no")  # 商家订单号
+                pay_amount = data.get("total_amount")  # 支付宝传回的实际支付金额（如 0.90）
+
+                # 4. 连接数据库执行发货
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
                     with conn.cursor() as cursor:
-                        # 🚀 暴力修复 1：先查出第一个可用的 ID
-                        cursor.execute(
-                            "SELECT id, card_key FROM banana_key_inventory WHERE status=0 LIMIT 1 FOR UPDATE")
+                        # 🚀 核心修复：精准匹配金额。
+                        # 使用 CAST 将 price_tag 和支付金额都转为 DECIMAL(10,2) 数字类型进行比较
+                        # 这样可以确保 0.9 能匹配到数据库里的 0.90，且绝对不会匹配到 598.00
+                        sql_select = """
+                            SELECT id, card_key 
+                            FROM banana_key_inventory 
+                            WHERE status = 0 
+                            AND CAST(price_tag AS DECIMAL(10,2)) = CAST(%s AS DECIMAL(10,2)) 
+                            LIMIT 1 
+                            FOR UPDATE
+                        """
+                        cursor.execute(sql_select, (pay_amount,))
                         card = cursor.fetchone()
 
                         if card:
-                            # 🚀 暴力修复 2：根据 ID 强制更新，确保状态变为 1
-                            card_id = card['id']
-                            sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
-                            cursor.execute(sql_update, (order_no, card_id))
+                            # 5. 更新库存状态为已售出(status=1)，并绑定订单号
+                            sql_update = """
+                                UPDATE banana_key_inventory 
+                                SET status = 1, order_no = %s, sold_at = NOW() 
+                                WHERE id = %s
+                            """
+                            cursor.execute(sql_update, (order_no, card['id']))
                             conn.commit()
-                            print(f"✅ 发货成功！订单: {order_no} -> ID: {card_id}")
+                            print(f"✅ Banana发货成功: 订单 {order_no} | 金额 {pay_amount} | 卡密 ID {card['id']}")
                         else:
-                            print(f"❌ 发货失败：库存表已空！订单号: {order_no}")
+                            # 如果没找到对应金额的库存，打印警告（此时需要手动补货）
+                            print(f"⚠️ 库存不足：数据库中没有金额为 {pay_amount} 的未售卡密！")
+
+                except Exception as db_err:
+                    print(f"❌ 数据库操作异常: {db_err}")
+                    if conn: conn.rollback()
                 finally:
-                    conn.close()
+                    if conn: conn.close()
+
+                # 只要签名验证通过且处理了逻辑，就给支付宝返回 success
                 return "success"
+        else:
+            print(f"⚠️ 支付宝签名验证失败，订单号: {data.get('out_trade_no')}")
+
     except Exception as e:
-        print(f"🔥 回调处理异常: {e}")
+        print(f"🔥 回调系统级异常: {e}")
+
     return "fail"
 
 
