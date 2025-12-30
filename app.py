@@ -122,7 +122,7 @@ executor = ThreadPoolExecutor(max_workers=5)
 def get_alipay_client():
     return AliPay(
         appid=ALIPAY_APP_ID,
-        app_notify_url="https://ai.yunmanybcz.chat/api/pay/notify",  # 确保你的公网IP正确
+        app_notify_url="https://139.199.176.16:5000/api/pay/notify",  # 确保你的公网IP正确
         app_private_key_string=FINAL_PRIVATE_KEY,
         alipay_public_key_string=FINAL_PUBLIC_KEY,
         sign_type="RSA2"
@@ -262,7 +262,7 @@ def banana_create_order():
             out_trade_no=out_trade_no,
             total_amount=str(price),
             subject=f"YunManGongFangAI网页登录月卡-{price}元",
-            notify_url="https://ai.yunmanybcz.chat/api/banana_pay/notify",
+            notify_url="https://139.199.176.16:5000/api/banana_pay/notify",
             timeout_express="10m"  # 👈 加上这一行
         )
         qr_code = order_res.get("qr_code")
