@@ -314,18 +314,48 @@
                 startCountdown(600);
 
                 // 3. 启动轮询检查支付状态
+                // 3. 启动轮询检查支付状态
                 if (pollTimer) clearInterval(pollTimer);
                 pollTimer = setInterval(async () => {
                     try {
                         const statusRes = await fetch(`${API_BASE}/api/banana_pay/status/${data.order_no}`);
                         const statusData = await statusRes.json();
+
                         if (statusData.paid) {
                             clearInterval(pollTimer);
-                            if (countdownTimer) clearInterval(countdownTimer); // 支付成功也停止倒计时
-                            alert(`🎉 购买成功！卡密：${statusData.card_key}`);
-                            document.getElementById('inviteCode').value = statusData.card_key;
-                            closeAllModals();
-                            openLoginModal();
+                            if (countdownTimer) clearInterval(countdownTimer);
+
+                            // --- 🚀 修改：展示专属卡密区，替代 alert ---
+                            const payModalInner = document.querySelector('#payModal .relative.bg-[#0F0F13]');
+                            payModalInner.innerHTML = `
+                                <div class="flex flex-col items-center animate-fade-in-up">
+                                    <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-6">
+                                        <i class="fa-solid fa-check text-green-500 text-3xl"></i>
+                                    </div>
+                                    <h3 class="text-2xl font-black text-white mb-2 italic">购买成功！</h3>
+                                    <p class="text-gray-400 text-sm mb-6">请务必截图保存您的卡密</p>
+
+                                    <div class="w-full bg-white/5 border-2 border-dashed border-cyan-500/50 p-6 rounded-2xl mb-8 group relative overflow-hidden">
+                                        <div class="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                        <div class="text-center">
+                                            <span class="text-xs text-cyan-400 font-mono tracking-widest block mb-2 uppercase">Your Key</span>
+                                            <span id="finalKey" class="text-3xl font-black text-white tracking-widest font-mono">${statusData.card_key}</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4 w-full">
+                                        <button onclick="copyKey('${statusData.card_key}')"
+                                                class="py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all">
+                                            复制卡密
+                                        </button>
+                                        <button onclick="autoLoginWithKey('${statusData.card_key}')"
+                                                class="py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-cyan-500/20">
+                                            立即跳转
+                                        </button>
+                                    </div>
+                                    <p class="mt-6 text-gray-500 text-[10px]">点击立即跳转将自动填入并登录</p>
+                                </div>
+                            `;
                         }
                     } catch (e) {
                         console.warn("支付状态同步中...");
@@ -341,6 +371,38 @@
         }
     }
 
+    // 🚀 新增：一键复制功能
+    function copyKey(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "已复制！";
+            btn.classList.add("text-green-400");
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.remove("text-green-400");
+            }, 2000);
+        });
+    }
+
+    // 🚀 新增：自动填入卡密并执行登录跳转
+    async function autoLoginWithKey(key) {
+        // 1. 关闭支付框并打开登录框
+        closeAllModals();
+        document.getElementById('loginModal').classList.remove('hidden');
+
+        // 2. 填入邀请码
+        const inviteInput = document.getElementById('inviteCode');
+        inviteInput.value = key;
+
+        // 3. 触发登录验证逻辑 (复用你现有的 handleValidateSubmit)
+        // 构造一个模拟的 Event 对象
+        const mockEvent = {
+            preventDefault: () => {
+            }
+        };
+        handleValidateSubmit(mockEvent);
+    }
     // 🚀 新增：倒计时处理函数
     function startCountdown(durationSeconds) {
         let timer = durationSeconds;
