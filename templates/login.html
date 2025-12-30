@@ -315,45 +315,47 @@
 
                 // 3. 启动轮询检查支付状态
                 // 3. 启动轮询检查支付状态
+                // 3. 启动轮询检查支付状态
                 if (pollTimer) clearInterval(pollTimer);
-                // 在 startBananaPay 函数中的轮询部分
                 pollTimer = setInterval(async () => {
                     try {
-                        const statusRes = await fetch(`${API_BASE}/api/banana_pay/status/${data.order_no}`);
+                        // 🚀 增加时间戳防止浏览器缓存结果
+                        const statusRes = await fetch(`${API_BASE}/api/banana_pay/status/${data.order_no}?t=${Date.now()}`);
                         const statusData = await statusRes.json();
 
-                        if (statusData.paid) {
+                        console.log("轮询中...", statusData); // 在控制台看看有没有收到 true
+
+                        if (statusData.paid === true || statusData.paid === "true") {
                             clearInterval(pollTimer);
                             if (countdownTimer) clearInterval(countdownTimer);
 
-                            // 🚀 核心：支付成功后，立即改变模态框内容，展示卡密
+                            // 🚀 确保这里能抓到真正的 card_key
+                            const finalKey = statusData.card_key;
+
+                            // 替换支付框内容为卡密展示
                             const payModalInner = document.querySelector('#payModal .relative.bg-[#0F0F13]');
-                            payModalInner.innerHTML = `
-                                <div class="flex flex-col items-center animate-fade-in-up">
-                                    <div class="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mb-6">
-                                        <i class="fa-solid fa-check text-green-500 text-4xl"></i>
-                                    </div>
-                                    <h3 class="text-2xl font-black text-white mb-2 italic">支付成功！</h3>
-                                    <p class="text-gray-400 text-sm mb-6">请截图保存卡密，防止丢失</p>
-
-                                    <div class="w-full bg-white/5 border-2 border-dashed border-cyan-500/50 p-6 rounded-2xl mb-8 group relative">
-                                        <div class="text-center">
-                                            <span class="text-xs text-cyan-400 font-mono tracking-widest block mb-2 uppercase">Your Private Key</span>
-                                            <span id="finalKey" class="text-3xl font-black text-white tracking-widest font-mono">${statusData.card_key}</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-2 gap-4 w-full">
-                                        <button onclick="copyKey('${statusData.card_key}')" class="py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all">复制卡密</button>
-                                        <button onclick="autoLoginWithKey('${statusData.card_key}')" class="py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold transition-all">立即跳转登录</button>
-                                    </div>
-                                </div>
-                            `;
+                            if (payModalInner) {
+                                payModalInner.innerHTML = `
+                                                    <div class="flex flex-col items-center animate-fade-in-up">
+                                                        <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mb-6">
+                                                            <i class="fa-solid fa-check text-green-500 text-3xl"></i>
+                                                        </div>
+                                                        <h3 class="text-2xl font-black text-white mb-2 italic">购买成功！</h3>
+                                                        <p class="text-gray-400 text-sm mb-6">请务必截图保存您的卡密</p>
+                                                        <div class="w-full bg-white/5 border-2 border-dashed border-cyan-500/50 p-6 rounded-2xl mb-8 text-center">
+                                                            <span class="text-3xl font-black text-white tracking-widest font-mono">${finalKey}</span>
+                                                        </div>
+                                                        <div class="grid grid-cols-2 gap-4 w-full">
+                                                            <button onclick="copyKey('${finalKey}')" class="py-4 bg-white/10 text-white rounded-xl font-bold">复制卡密</button>
+                                                            <button onclick="autoLoginWithKey('${finalKey}')" class="py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold">立即登录</button>
+                                                        </div>
+                                                    </div>`;
+                            }
                         }
                     } catch (e) {
-                        console.warn("同步中...");
+                        console.warn("同步状态中...");
                     }
-                }, 3000);
+                }, 2500); // 稍微加快轮询速度
             } else {
                 alert("下单失败：" + (data.msg || "接口繁忙"));
                 closePayModal();
