@@ -10,6 +10,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 
 from pymysql.cursors import DictCursor
 from alipay import AliPay
+from sympy.physics.units import amount
 
 # 引入项目现有的数据库管理器 (保持你原有的引用)
 from db.redis_manager import redis_manager
