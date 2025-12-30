@@ -371,16 +371,22 @@
     }
 
     // 🚀 新增：一键复制功能
+    // 🚀 修正后的复制函数：去掉 event 依赖，改用更稳健的提示方式
     function copyKey(text) {
+        if (!text) return;
         navigator.clipboard.writeText(text).then(() => {
-            const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = "已复制！";
-            btn.classList.add("text-green-400");
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.classList.remove("text-green-400");
-            }, 2000);
+            // 使用简单的弹窗提示，避免操作 DOM 变量导致的报错
+            alert("卡密已成功复制到剪贴板！");
+        }).catch(err => {
+            console.error("复制失败:", err);
+            // 兼容性备选方案
+            const input = document.createElement('input');
+            input.setAttribute('value', text);
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            alert("卡密已复制");
         });
     }
 
