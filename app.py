@@ -357,8 +357,8 @@ def validate_invite_code():
                 session_id,
                 max_age=86400,
                 httponly=True,
-                samesite='Lax',  # 👈 从 'None' 改为 'Lax'
-                secure=False  # 👈 暂时改为 False，直到浏览器地址栏变绿
+                samesite='None',  # 👈 必须设为 None 才能让 Cookie 穿透 CDN 转发
+                secure=True  # 👈 必须设为 True，否则 HTTPS 环境下浏览器会直接拦截
             )
             return resp
         return jsonify({'success': False, 'message': result['message']}), 401
