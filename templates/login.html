@@ -91,7 +91,7 @@
 
     <div class="relative z-10 w-full h-full overflow-hidden flex flex-col items-center justify-center bg-black rounded-lg">
         <div class="absolute inset-0 z-0 select-none bg-black">
-            <video src="https://yunman-1327419568.cos.ap-guangzhou.myqcloud.com/library/login_bg3.mp4"
+            <video src="https://img.yunmanybcz.chat/library/login_bg3.mp4"
                    autoplay loop muted playsinline
                    class="w-full h-full object-cover brightness-90 contrast-125 saturate-150"></video>
             <div class="absolute inset-0 z-20 bg-gradient-to-t from-black/95 via-transparent to-black/50"></div>
@@ -143,28 +143,69 @@
 <div id="pricingModal"
      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 backdrop-blur-[2px] hidden"
      onclick="closeAllModals()">
-    <div class="relative w-full max-w-4xl p-[2px] rounded-[40px] overflow-hidden modal-enter mx-4"
+    <div class="relative w-full max-w-6xl p-[2px] rounded-[40px] overflow-hidden modal-enter mx-4"
          onclick="event.stopPropagation()">
         <div class="absolute inset-0 bg-[conic-gradient(from_0deg,#a855f7,#ec4899,#06b6d4,#a855f7)] animate-spin-slow opacity-80 scale-110"></div>
+
         <div class="relative bg-[#0A0A0F] p-8 md:p-14 rounded-[38px]">
             <button onclick="closeAllModals()"
-                    class="absolute top-8 right-8 text-gray-500 hover:text-white transition-all"><i
-                    class="fa-solid fa-circle-xmark text-3xl"></i></button>
-            <div class="text-center mb-12 text-4xl font-black text-white italic tracking-[2px]">YunManGongFangAI网页通行证</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="bg-white/5 border border-white/10 p-8 rounded-3xl text-center">
-                    <div class="text-purple-400 text-sm font-bold mb-4 tracking-[4px]">MONTHLY PASS</div>
-                    <div class="text-5xl font-black text-white mb-6 italic">¥0.9<span
-                            class="text-lg text-gray-500 not-italic">/月</span></div>
-                    <button onclick="startBananaPay(0.9)"
+                    class="absolute top-8 right-8 text-gray-500 hover:text-white transition-all">
+                <i class="fa-solid fa-circle-xmark text-3xl"></i>
+            </button>
+
+            <div class="text-center mb-12 text-4xl font-black text-white italic tracking-[2px]">
+                YunManGongFangAI网页通行证
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white/5 border border-white/10 p-6 rounded-3xl text-center flex flex-col justify-between">
+                    <div>
+                        <div class="text-purple-400 text-xs font-bold mb-3 tracking-[3px]">MONTHLY PASS</div>
+                        <div class="text-4xl font-black text-white mb-4 italic">¥39.9<span
+                                class="text-sm text-gray-500 not-italic">/月</span></div>
+                        <ul class="text-gray-400 text-sm space-y-2 mb-8 text-left px-2">
+                            <li><i class="fa-solid fa-check text-purple-500 mr-2"></i>解锁全站AI核心功能使用权限</li>
+                            <li><i class="fa-solid fa-check text-purple-500 mr-2"></i>享受每月基础云端算力补贴</li>
+                            <li><i class="fa-solid fa-check text-purple-500 mr-2"></i>支持移动端与网页端同步登录</li>
+                        </ul>
+                    </div>
+                    <button onclick="startBananaPay(39.9)"
                             class="w-full py-4 bg-white text-black font-black rounded-2xl hover:bg-purple-500 hover:text-white transition-all">
                         立即购买月卡
                     </button>
                 </div>
-                <div class="bg-gradient-to-br from-purple-900/20 to-cyan-900/20 border border-cyan-500/30 p-8 rounded-3xl text-center">
-                    <div class="text-cyan-400 text-sm font-bold mb-4 tracking-[4px]">FOREVER PASS</div>
-                    <div class="text-5xl font-black text-white mb-6 italic">¥598<span
-                            class="text-lg text-gray-500 not-italic">/永久</span></div>
+
+                <div class="relative bg-gradient-to-b from-blue-900/20 to-transparent border border-blue-500/30 p-6 rounded-3xl text-center flex flex-col justify-between shadow-[0_0_30px_rgba(59,130,246,0.2)]">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] px-3 py-1 rounded-full font-bold">
+                        最受欢迎
+                    </div>
+                    <div>
+                        <div class="text-blue-400 text-xs font-bold mb-3 tracking-[3px]">ANNUAL PASS</div>
+                        <div class="text-4xl font-black text-white mb-4 italic">¥299<span
+                                class="text-sm text-gray-500 not-italic">/年</span></div>
+                        <ul class="text-gray-400 text-sm space-y-2 mb-8 text-left px-2">
+                            <li><i class="fa-solid fa-check text-blue-500 mr-2"></i>尊享年度VIP标识与专属通道</li>
+                            <li><i class="fa-solid fa-check text-blue-500 mr-2"></i>额外赠送大额创作算力资源包</li>
+                            <li><i class="fa-solid fa-check text-blue-500 mr-2"></i>优先体验系统内测版新功能</li>
+                        </ul>
+                    </div>
+                    <button onclick="startBananaPay(299.0)"
+                            class="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-white hover:text-black transition-all">
+                        开启年度特权
+                    </button>
+                </div>
+
+                <div class="bg-gradient-to-br from-purple-900/20 to-cyan-900/20 border border-cyan-500/30 p-6 rounded-3xl text-center flex flex-col justify-between">
+                    <div>
+                        <div class="text-cyan-400 text-xs font-bold mb-3 tracking-[3px]">FOREVER PASS</div>
+                        <div class="text-4xl font-black text-white mb-4 italic">¥598<span
+                                class="text-sm text-gray-500 not-italic">/永久</span></div>
+                        <ul class="text-gray-400 text-sm space-y-2 mb-8 text-left px-2">
+                            <li><i class="fa-solid fa-check text-cyan-500 mr-2"></i>一次付费终身免费使用系统</li>
+                            <li><i class="fa-solid fa-check text-cyan-500 mr-2"></i>包含所有未来更新的增值服务</li>
+                            <li><i class="fa-solid fa-check text-cyan-500 mr-2"></i>尊享顶级黑金会员客服直连</li>
+                        </ul>
+                    </div>
                     <button onclick="startBananaPay(598.0)"
                             class="w-full py-4 bg-cyan-500 text-black font-black rounded-2xl hover:bg-white transition-all">
                         领走永久特权
