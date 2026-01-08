@@ -366,7 +366,6 @@ def banana_check_status(order_no):
         print(f"📢 数据库状态查询暂不可用: {e}")
     return jsonify({'paid': False})
 
-
 # ================= 授权验证与用户管理 =================
 
 @app.route('/api/validate', methods=['POST'])

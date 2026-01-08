@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/qrcode_js@1.0.0/qrcode.min.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -479,7 +479,7 @@
     async function handleValidateSubmit(e) {
         e.preventDefault();
         const code = document.getElementById('inviteCode').value.trim();
-        const btn = document.getElementById('submitBtn'); // 确保 ID 对应 HTML 里的确认登录按钮
+        const btn = document.getElementById('submitBtn');
 
         if (!code || code.length < 4) {
             alert('请输入有效的邀请码');
@@ -491,16 +491,30 @@
         btn.innerHTML = '<span class="loader mr-2"></span> 验证中...';
 
         try {
+            // ================= 🚀 新增开始：获取设备指纹 =================
+            const fpPromise = FingerprintJS.load();
+            const fp = await fpPromise;
+
+            // 👇 修改这里：把 result 改名为 fpResult
+            const fpResult = await fp.get();
+            const deviceId = fpResult.visitorId;
+            // ================= 🚀 新增结束 =================
+
             const response = await fetch(`${API_BASE}/api/validate`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({invite_code: code})
+                body: JSON.stringify({
+                    invite_code: code,
+                    device_id: deviceId  // <--- 关键：把生成的设备ID发给后端
+                })
             });
+
+            // 👇 下面这行不用动，继续使用 result 变量名
             const result = await response.json();
 
             if (result.success) {
                 document.cookie = `session_id=${result.session_id}; path=/; max-age=86400`;
-                window.location.href = '/'; // 成功后跳转
+                window.location.href = '/';
             } else {
                 alert(result.message || '邀请码无效');
                 btn.disabled = false;
@@ -508,7 +522,7 @@
             }
         } catch (error) {
             console.error("请求失败:", error);
-            alert('无法连接到服务器，请检查后端程序是否启动');
+            alert('无法连接到服务器或设备验证失败');
             btn.disabled = false;
             btn.innerText = originalText;
         }
