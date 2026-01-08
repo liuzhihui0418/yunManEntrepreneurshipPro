@@ -430,6 +430,31 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    # ================= 🚀 新增：严格检查邀请码状态 =================
+    def check_code_is_valid_strict(self, code):
+        """
+        严格检查邀请码是否有效（直接查库，解决手动改库不生效的问题）
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                sql = "SELECT is_active, expires_at FROM invite_codes WHERE code = %s"
+                cursor.execute(sql, (code,))
+                res = cursor.fetchone()
+
+                if not res: return False  # 码不存在
+                if res['is_active'] != 1: return False  # 被禁用
+
+                # 检查过期时间
+                if res['expires_at'] and res['expires_at'] < datetime.datetime.now():
+                    return False  # 已过期
+
+                return True
+        except Exception as e:
+            print(f"Check Code Strict Error: {e}")
+            return False
+        finally:
+            conn.close()
 
 # 实例化在最后
 db_manager = DatabaseManager()

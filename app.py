@@ -184,8 +184,21 @@ def favicon():
 @app.route('/')
 def index():
     session_id = request.cookies.get('session_id')
+
+    # === 修改开始：增加双重验证 ===
     if session_id and redis_manager.validate_session(session_id):
-        return render_template('index.html')
+        # 1. Session 有效，取出里面的 invite_code
+        user_info = redis_manager.get_session_info(session_id)
+        if user_info:
+            code = user_info.get('code')
+            # 2. 去数据库查一下这个码过期没
+            if db_manager.check_code_is_valid_strict(code):
+                return render_template('index.html')
+            else:
+                # 如果过期了，销毁 Session
+                redis_manager.destroy_session(session_id)
+    # === 修改结束 ===
+
     return render_template('login.html')
 
 
@@ -548,7 +561,16 @@ def check_session():
     session_id = request.cookies.get('session_id')
     if session_id:
         user_info = redis_manager.get_session_info(session_id)
-        if user_info: return jsonify({'valid': True, 'user': user_info})
+        if user_info:
+            # === 修改开始：增加实时过期检查 ===
+            code = user_info.get('code')
+            # 如果数据库里显示已过期/禁用，直接踢下线
+            if not db_manager.check_code_is_valid_strict(code):
+                redis_manager.destroy_session(session_id)
+                return jsonify({'valid': False})
+            # === 修改结束 ===
+
+            return jsonify({'valid': True, 'user': user_info})
     return jsonify({'valid': False})
 
 
