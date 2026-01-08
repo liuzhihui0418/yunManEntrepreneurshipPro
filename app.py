@@ -638,10 +638,34 @@ def delete_code_api():
 # 🚀 风格角色库 API (已完美移植合并)
 # ==========================================
 
+# ==========================================
+# 🚀 风格角色库 API (已完美移植合并)
+# ==========================================
+
 @app.route('/style_library')
 def style_library_page():
-    # 访问此页面：http://139.199.176.16:5000/style_library
-    return render_template('style_library.html')
+    # 1. 获取 Session ID
+    session_id = request.cookies.get('session_id')
+
+    # 2. 验证 Session 是否存在于 Redis
+    if session_id and redis_manager.validate_session(session_id):
+        user_info = redis_manager.get_session_info(session_id)
+        if user_info:
+            code = user_info.get('code')
+            device_id = user_info.get('device_id')
+
+            # 3. 核心安全校验：检查是否过期 + 检查设备绑定一致性
+            # (这步非常重要，防止用户虽然有Session，但在后台被删了或被解绑了还能进)
+            if db_manager.check_code_is_valid_strict(code) and \
+                    db_manager.check_device_consistency(code, device_id):
+                # ✅ 验证通过，放行进入风格库
+                return render_template('style_library.html')
+            else:
+                # ❌ 验证失败（过期或设备不对），销毁 Session
+                redis_manager.destroy_session(session_id)
+
+    # 4. 未登录或验证失败，重定向回首页（也就是登录页）
+    return redirect('/')
 
 
 # 1. 保存/更新角色
