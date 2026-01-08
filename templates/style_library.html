@@ -253,7 +253,8 @@
 </div>
 
 <script>
-    const API_BASE = "http://127.0.0.1:8000/api/cloud";
+    // 使用相对路径，自动适配当前域名和端口 (5000)
+    const API_BASE = "/api/cloud";
     const categories = [
         {label: '古风角色', value: 'ancient'},
         {label: '都市角色', value: 'urban'},

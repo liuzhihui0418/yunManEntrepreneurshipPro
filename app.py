@@ -4,117 +4,169 @@ import os
 import uuid
 import time
 import pymysql
+import base64
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, render_template, request, jsonify, send_from_directory, redirect
 
-from pymysql.cursors import DictCursor
-from alipay import AliPay
+# 1. 引入 dotenv 用于加载环境变量
+from dotenv import load_dotenv
 
-
-# 引入项目现有的数据库管理器 (保持你原有的引用)
-from db.redis_manager import redis_manager
-from db.database import db_manager
-
-# main.py 顶部修改
-# --- main.py 顶部修改 ---
-
-# --- main.py 顶部全量替换 ---
+# Flask 相关引用
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, make_response
 from flask_cors import CORS
 
+# 数据库与支付引用
+from pymysql.cursors import DictCursor
+from alipay import AliPay
+from db.redis_manager import redis_manager
+from db.database import db_manager
+
+# 腾讯云 COS 引用
+from qcloud_cos import CosConfig
+from qcloud_cos import CosS3Client
+
+# ==========================================
+# 0. 加载 .env 环境变量 (最先执行)
+# ==========================================
+# 这行代码会自动读取同目录下的 .env 文件
+load_dotenv()
+
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
-# 1. 允许所有来源跨域
+# 允许所有来源跨域
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
 # ==========================================
-# 1. 全局配置与密钥 (直接写在这里，防止引入报错)
+# 1. 全局配置与密钥 (已改为从环境变量读取)
 # ==========================================
 
-# 支付宝 APPID
-ALIPAY_APP_ID = "2021006117616884"
+# --- 支付宝配置 ---
+ALIPAY_APP_ID = os.getenv("ALIPAY_APP_ID")
+PRIVATE_KEY_CONTENT = os.getenv("PRIVATE_KEY_CONTENT")
+ALIPAY_PUBLIC_KEY_CONTENT = os.getenv("ALIPAY_PUBLIC_KEY_CONTENT")
 
-# 你的应用私钥 (直接填入，确保格式正确)
-PRIVATE_KEY_CONTENT = """
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCLce5pKBVWEjBpIHqE9j9Hh5/KnbnPU
-MqL7qKuQXN4ogEkggnejg62UyGXVchgIzzW5k3T2YmQG0bVgzR8el7/cJ8btg8e1d0gRZn+m8LK+0qGXJ
-Mdx+6rSGZbcZ6c+yaw+GlTQdnvEhPYq0zexN6SzxoWKkScOfEmyPXEo8vpb5TXFCPHuYn2hxnGhwePp5R
-fk5VPqrO5BcgJRd1cNNn+UWdmL54qVaA5CEQrHTaUTwIKmSYZ1BfGy0g0XH7qqxNs+WS9dCk5p7BCMpaK
-schkfmqdg/MwRzDmIDNtuufxe/AU7sqlsPoCGn95vR5XlOXcslps0gdLMeZ5IVN5y/tTAgMBAAECggEAY
-7oJfZ8zEylTAfw+Y1UREIEIYInI12G6WbVDF0ir4nxKQOfXUxlZoD936JlrAoZw/mgbBQWxAiTf1ddN9D
-A4PIs430KnMbBVwrzEU3jmKPDq7YjLliLkqA7RVVi+zRo5I5ulB+wyhm3xT6XDBhbZ7zi6OVvlUa2Gr+x
-NCGL0dG9LVCnQMnDeEj9IVJFsVG3Gk4tbdXRK6hoF6/hCVzNl9vBk8Kdftbf5ec19JTq6mf8TcenRNa9u
-8Y11PMaPOIVW5raheQFIj6BSLYm0AsAnVrfb8CXzPxijdykXAEgxiPtkspggcoBkN/x2/WfNivE/KqIxF
-HQ+vNJgIuH8pWnVoQKBgQDk02teYhhcsOWzhvY070UA5PeEhMYKq50DXbXpH5Y4skr2XnFUD6KC74M3bK
-ovsPk5osWwV1SARvh9BgPEsLXs6KDNbYf62GYe4aX2qJ+3Yhnajup7A5rmHwNAU7c8t/UbOdOdYg4Dw/J
-qIZEf4zEdBoz8KsHuULdLHBHR6r3R2QKBgQCcATpZ3ITOCvkXwB5kBgUS0l8/RN681VI4qNHHhH/4r4+o
-DEDOMHYvh/zj1IyGKFqG3jvD+iQRiPQbZ4Xlw0zGDyst/1250VGjTc3+xqPSmMOFH0qt3AMW/S7aVzmXA
-ls0FDjtef0tiYQwE2QdjPxmmWFUpwkZjTOmwA05v7JPCwKBgQCbuSWAfdGGgvxPSLGVJKAZE7k+ff0old
-Gs0MFTfSOGQg+xymPliR5XbRgnR9Qp0I5LIvLWJxhik+nXa5h06q1kJIwKQVgg5dPZgEaprefDrQdbLZd
-1T+bCZKiZxl8U+zva42eX23seJON8Rou037A0yJh5o7+Gp3eVreySpuW3QQKBgBbEwxxsZ+Gejl5eBtF4
-Y3MsywPz7EJJLBfi48Mn3nmQPfo715WAUy96vHkQA3ZtG1FFzBk9P9hjUaVSRaOUDnd1rUqoU6iUGUMpT
-uBZY32QGDEssPyQ+M55I0ZwppIYoPEH5osaW84ynN1bZyg89HWQ+zicrGJTTm+O5h9AkCijAoGBALzK5R
-IxvqqP8kMKA53HYP3dt8rly1vwyhzke0ULf1Mw1f96TKRcMYV82+HD/ixVIR3Pdr5vURhAP71GEq7yy0X
-HC76pO9EdBZp5ok/fvetxLN1TBNEPVuxAzooFBLXCoWhskEZC8tP7JksVKXiLv/kjUwRYwTUpSrBvMcEu
-WgYv
-"""
+# --- 腾讯云 COS 配置 ---
+TENCENT_SECRET_ID = os.getenv("TENCENT_SECRET_ID")
+TENCENT_SECRET_KEY = os.getenv("TENCENT_SECRET_KEY")
+TENCENT_REGION = os.getenv("TENCENT_REGION")
+TENCENT_BUCKET = os.getenv("TENCENT_BUCKET")
+CDN_DOMAIN = os.getenv("CDN_DOMAIN")
 
-# 支付宝公钥 (直接填入)
-ALIPAY_PUBLIC_KEY_CONTENT = """
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg3Al49jSZnlY9iPcunRgWZvgwT9X03z3L+oajd+3Yq8sq21F4r8XB/Pu0TuzqpR2uIjZis4DulE5LoB9JhDei9xw9If5y96QsoMmCmkBaDSBRwSko2TaJmA3MmgVOgWSRQ753Wgx5xffYOmmrPq/dQlGH0J91NaWyVf72kPgjgW6+1jq7rOHUc2aRlVF+SNwOPO9OI/8zk+2tmOZRvT2QvGnjteqe5zI1/cpZ9t4XkzFSMP84hn5xOHH5GTPXC1yM2U8quT+Vlte+I/2XwIx3zGq+PSnOPENwJHFS8bVFpkcYB91ZZFwBH2nLPua/kmMbh/j0h+/UcD8nrgrnlAdDQIDAQAB
-"""
+# --- 数据库配置 ---
+# 注意：端口需要转为 int，并提供默认值防止报错
+MYSQL_CONF = {
+    "host": os.getenv("MYSQL_HOST", "127.0.0.1"),
+    "port": int(os.getenv("MYSQL_PORT", 3306)),
+    "user": os.getenv("MYSQL_USER", "root"),
+    "password": os.getenv("MYSQL_PASSWORD"),
+    "db": os.getenv("MYSQL_DB"),
+    "charset": "utf8mb4",
+    "cursorclass": DictCursor
+}
+
+# --- 管理员密码 ---
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+# 创建全局线程池
+executor = ThreadPoolExecutor(max_workers=5)
+
+# 初始化 COS 客户端
+try:
+    if TENCENT_SECRET_ID and TENCENT_SECRET_KEY:
+        cos_config = CosConfig(Region=TENCENT_REGION, SecretId=TENCENT_SECRET_ID, SecretKey=TENCENT_SECRET_KEY)
+        cos_client = CosS3Client(cos_config)
+        print("✅ 腾讯云 COS 客户端初始化成功")
+    else:
+        print("⚠️ 未检测到腾讯云配置，COS 功能将不可用")
+        cos_client = None
+except Exception as e:
+    print(f"❌ 腾讯云 COS 初始化失败: {e}")
+    cos_client = None
 
 
-# 密钥清洗函数 (直接放在这里)
+# 密钥清洗函数 (逻辑保持不变，依然兼容 .env 中的单行格式)
 def fix_key_format(key_content, is_private=True):
+    if not key_content:
+        return ""
+    # 清洗掉可能存在的头尾和空格
     key_content = key_content.replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----",
                                                                                      "")
     key_content = key_content.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
     key_content = key_content.replace("-----BEGIN PUBLIC KEY-----", "").replace("-----END PUBLIC KEY-----", "")
     key_content = key_content.replace("\n", "").replace(" ", "").strip()
+
+    # 补全 padding
     missing_padding = len(key_content) % 4
     if missing_padding: key_content += '=' * (4 - missing_padding)
+
+    # 重新切分，每64字符一行
     split_key = '\n'.join([key_content[i:i + 64] for i in range(0, len(key_content), 64)])
+
     if is_private:
         return f"-----BEGIN PRIVATE KEY-----\n{split_key}\n-----END PRIVATE KEY-----"
     else:
         return f"-----BEGIN PUBLIC KEY-----\n{split_key}\n-----END PUBLIC KEY-----"
 
 
-# 格式化后的密钥
+# 格式化密钥
 FINAL_PRIVATE_KEY = fix_key_format(PRIVATE_KEY_CONTENT, True)
 FINAL_PUBLIC_KEY = fix_key_format(ALIPAY_PUBLIC_KEY_CONTENT, False)
-
-# 核心：定义全局数据库配置 (所有函数都能访问)
-MYSQL_CONF = {
-    "host": "127.0.0.1",
-    "port": 3306,
-    "user": "root",
-    "password": "aini7758258!!",
-    "db": "invite_code_system",
-    "charset": "utf8mb4",
-    "cursorclass": DictCursor
-}
-
-# 创建全局线程池
-executor = ThreadPoolExecutor(max_workers=5)
 
 
 # 初始化支付宝客户端
 def get_alipay_client():
     return AliPay(
         appid=ALIPAY_APP_ID,
-        app_notify_url="https://ai.yunmanybcz.chat/api/pay/notify",  # 确保你的公网IP正确
+        app_notify_url="https://ai.yunmanybcz.chat/api/pay/notify",
         app_private_key_string=FINAL_PRIVATE_KEY,
         alipay_public_key_string=FINAL_PUBLIC_KEY,
         sign_type="RSA2"
     )
 
 
-# ==========================================
-# 2. 系统初始化与基础路由
-# ==========================================
+# ================= 工具函数 =================
+
+# 辅助函数：上传 Base64 到腾讯云 COS
+def ensure_url_logic(data_str: str, max_size_mb: float, sub_folder: str = "library"):
+    if not data_str:
+        return None
+
+    # 如果已经是 http 开头，说明没修改图片，直接返回
+    if data_str.startswith("http"):
+        return data_str
+
+    # 解析 Base64
+    if "base64," in data_str:
+        try:
+            if not cos_client:
+                raise Exception("COS 客户端未初始化，请检查密钥")
+
+            header, encoded = data_str.split("base64,", 1)
+            # 简单的扩展名提取
+            ext = "png"
+            if "jpeg" in header: ext = "jpg"
+            if "video" in header: ext = "mp4"
+
+            file_content = base64.b64decode(encoded)
+
+            # 大小检查
+            size_mb = len(file_content) / (1024 * 1024)
+            if size_mb > max_size_mb:
+                raise ValueError(f"文件过大({size_mb:.1f}MB)，限制{max_size_mb}MB")
+
+            # 生成文件名并上传
+            filename = f"{sub_folder}/{uuid.uuid4().hex}.{ext}"
+            cos_client.put_object(Bucket=TENCENT_BUCKET, Body=file_content, Key=filename)
+
+            # 返回 CDN 链接
+            return f"{CDN_DOMAIN}/{filename}"
+        except Exception as e:
+            print(f"COS 上传异常: {e}")
+            raise e
+    return None
+
+
+# ================= 基础路由 =================
 
 # Redis预热
 try:
@@ -137,9 +189,7 @@ def index():
     return render_template('login.html')
 
 
-# ==========================================
-# 3. 核心功能：支付与发货逻辑
-# ==========================================
+# ================= 支付功能 =================
 
 @app.route('/api/pay/create', methods=['POST'])
 def create_order():
@@ -152,19 +202,15 @@ def create_order():
         out_trade_no = f"ORD_{int(time.time())}_{uuid.uuid4().hex[:4].upper()}"
         alipay = get_alipay_client()
 
-        # 修改后
         order_res = alipay.api_alipay_trade_precreate(
             out_trade_no=out_trade_no,
             total_amount=str(price),
             subject=f"算力充值-{face_value}元",
-            timeout_express="10m"  # 👈 加上这一行
+            timeout_express="10m"
         )
 
-        # --- 🔍 修改点：增加错误日志打印 ---
         qr_code = order_res.get("qr_code")
         if not qr_code:
-            print("❌ 支付宝下单失败，返回详情:", order_res)  # 看控制台这个输出！
-            # 把具体错误返回给前端，方便调试
             error_msg = order_res.get('sub_msg', order_res.get('msg', '未知错误'))
             return jsonify({'code': 500, 'msg': f'支付宝拒绝：{error_msg}'})
 
@@ -186,19 +232,16 @@ def pay_notify():
             trade_status = data.get("trade_status")
             if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
                 order_no = data.get("out_trade_no")
-                # 🚀 修正 1：从 data 中获取正确的金额变量名
                 pay_amount = data.get("total_amount")
 
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
                     with conn.cursor() as cursor:
-                        # 🚀 修正 2：确保查询库存的变量名对应 pay_amount
                         sql_select = "SELECT id, card_key FROM banana_key_inventory WHERE status=0 AND CAST(price_tag AS DECIMAL(10,2)) = CAST(%s AS DECIMAL(10,2)) LIMIT 1 FOR UPDATE"
                         cursor.execute(sql_select, (pay_amount,))
                         card = cursor.fetchone()
 
                         if card:
-                            # 🚀 修正 3：确保更新的是同一个表 banana_key_inventory
                             sql_update = "UPDATE banana_key_inventory SET status=1, order_no=%s, sold_at=NOW() WHERE id=%s"
                             cursor.execute(sql_update, (order_no, card['id']))
                             conn.commit()
@@ -229,7 +272,7 @@ def check_pay_status(order_no):
     return jsonify({'paid': False})
 
 
-# ================= 🍌 Banana 支付核心接口 =================
+# ================= Banana 支付核心接口 =================
 
 @app.route('/api/banana_pay/create', methods=['POST'])
 def banana_create_order():
@@ -237,17 +280,15 @@ def banana_create_order():
     try:
         data = request.get_json()
         price = data.get('price')
-        # 生成独立订单号
         out_trade_no = f"BANANA_{int(time.time())}_{uuid.uuid4().hex[:4].upper()}"
 
         alipay = get_alipay_client()
-        # 修改后
         order_res = alipay.api_alipay_trade_precreate(
             out_trade_no=out_trade_no,
             total_amount=str(price),
             subject=f"YunManGongFangAI网页登录月卡-{price}元",
             notify_url="https://ai.yunmanybcz.chat/api/banana_pay/notify",
-            timeout_express="10m"  # 👈 加上这一行
+            timeout_express="10m"
         )
         qr_code = order_res.get("qr_code")
         if not qr_code: return jsonify({'code': 500, 'msg': '支付宝下单失败'})
@@ -258,29 +299,21 @@ def banana_create_order():
 
 @app.route('/api/banana_pay/notify', methods=['POST'])
 def banana_pay_notify():
-    """Banana 支付回调接口：负责精准金额匹配并发货"""
+    """Banana 支付回调"""
     try:
-        # 1. 获取支付宝 POST 过来的数据
         data = request.form.to_dict()
         signature = data.pop("sign", None)
         alipay = get_alipay_client()
 
-        # 2. 验证签名，确保回调来自支付宝
         if alipay.verify(data, signature):
             trade_status = data.get("trade_status")
-
-            # 3. 只有支付成功才执行发货
             if trade_status in ("TRADE_SUCCESS", "TRADE_FINISHED"):
-                order_no = data.get("out_trade_no")  # 商家订单号
-                pay_amount = data.get("total_amount")  # 支付宝传回的实际支付金额（如 0.90）
+                order_no = data.get("out_trade_no")
+                pay_amount = data.get("total_amount")
 
-                # 4. 连接数据库执行发货
                 conn = pymysql.connect(**MYSQL_CONF)
                 try:
                     with conn.cursor() as cursor:
-                        # 🚀 核心修复：精准匹配金额。
-                        # 使用 CAST 将 price_tag 和支付金额都转为 DECIMAL(10,2) 数字类型进行比较
-                        # 这样可以确保 0.9 能匹配到数据库里的 0.90，且绝对不会匹配到 598.00
                         sql_select = """
                             SELECT id, card_key 
                             FROM banana_key_inventory 
@@ -293,7 +326,6 @@ def banana_pay_notify():
                         card = cursor.fetchone()
 
                         if card:
-                            # 5. 更新库存状态为已售出(status=1)，并绑定订单号
                             sql_update = """
                                 UPDATE banana_key_inventory 
                                 SET status = 1, order_no = %s, sold_at = NOW() 
@@ -303,34 +335,26 @@ def banana_pay_notify():
                             conn.commit()
                             print(f"✅ Banana发货成功: 订单 {order_no} | 金额 {pay_amount} | 卡密 ID {card['id']}")
                         else:
-                            # 如果没找到对应金额的库存，打印警告（此时需要手动补货）
                             print(f"⚠️ 库存不足：数据库中没有金额为 {pay_amount} 的未售卡密！")
-
                 except Exception as db_err:
                     print(f"❌ 数据库操作异常: {db_err}")
                     if conn: conn.rollback()
                 finally:
                     if conn: conn.close()
-
-                # 只要签名验证通过且处理了逻辑，就给支付宝返回 success
                 return "success"
-        else:
-            print(f"⚠️ 支付宝签名验证失败，订单号: {data.get('out_trade_no')}")
-
+        return "fail"
     except Exception as e:
         print(f"🔥 回调系统级异常: {e}")
-
-    return "fail"
+        return "fail"
 
 
 @app.route('/api/banana_pay/status/<order_no>', methods=['GET'])
 def banana_check_status(order_no):
-    """状态查询接口 - 增加异常拦截，确保数据库断开时不崩溃"""
+    """状态查询接口"""
     try:
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                # 查询这个订单号是否已经成功绑定了卡密 (status=1)
                 sql = "SELECT card_key FROM banana_key_inventory WHERE order_no = %s AND status = 1"
                 cursor.execute(sql, (order_no,))
                 res = cursor.fetchone()
@@ -339,16 +363,11 @@ def banana_check_status(order_no):
         finally:
             conn.close()
     except Exception as e:
-        # 如果数据库连接失败(WinError 10061)，只打印警告而不抛出异常
         print(f"📢 数据库状态查询暂不可用: {e}")
-
-    # 如果没查到或者数据库报错，统一返回 False，前端会继续等
     return jsonify({'paid': False})
 
 
-# ==========================================
-# 4. 原有功能：授权验证与用户管理
-# ==========================================
+# ================= 授权验证与用户管理 =================
 
 @app.route('/api/validate', methods=['POST'])
 def validate_invite_code():
@@ -361,14 +380,13 @@ def validate_invite_code():
             session_id = redis_manager.create_session(code)
             user_info = redis_manager.get_session_info(session_id)
             resp = jsonify({'success': True, 'session_id': session_id, 'user': user_info, 'message': '成功'})
-            # 找到 validate_invite_code 函数中的 resp.set_cookie
             resp.set_cookie(
                 'session_id',
                 session_id,
                 max_age=86400,
                 httponly=True,
-                samesite='None',  # 👈 必须设为 None 才能让 Cookie 穿透 CDN 转发
-                secure=True  # 👈 必须设为 True，否则 HTTPS 环境下浏览器会直接拦截
+                samesite='None',
+                secure=True
             )
             return resp
         return jsonify({'success': False, 'message': result['message']}), 401
@@ -420,21 +438,15 @@ def verify_license_db():
         return jsonify({'code': 500, 'msg': f"服务器错误: {str(e)}"}), 500
 
 
-# ==========================================
-# 新增：实时库存查询接口
-# ==========================================
 @app.route('/api/inventory/stocks', methods=['GET'])
 def get_realtime_stocks():
     """获取所有面额的实时库存数量"""
     conn = pymysql.connect(**MYSQL_CONF)
     try:
         with conn.cursor() as cursor:
-            # 统计每个面额下状态为 0 (未售出) 的数量
             sql = "SELECT face_value, COUNT(*) as count FROM compute_keys WHERE status = 0 GROUP BY face_value"
             cursor.execute(sql)
             results = cursor.fetchall()
-
-            # 将结果转为字典格式 {50: 12, 100: 5, ...}
             stock_map = {row['face_value']: row['count'] for row in results}
             return jsonify({'code': 200, 'stocks': stock_map})
     except Exception as e:
@@ -541,12 +553,127 @@ def get_codes_list():
 
 
 # ==========================================
-# 新增路由：风格角色库页面
+# 🚀 风格角色库 API (已完美移植合并)
 # ==========================================
+
 @app.route('/style_library')
 def style_library_page():
-    # 这里不需要加 .html 后缀，Flask 会自动去 templates 文件夹找
+    # 访问此页面：http://139.199.176.16:5000/style_library
     return render_template('style_library.html')
+
+
+# 1. 保存/更新角色
+@app.route("/api/cloud/character/save", methods=['POST'])
+def save_character_db():
+    try:
+        data = request.get_json()
+
+        label = data.get('label', '').strip()
+        name = data.get('name', '').strip()
+        desc = data.get('desc', '').strip()
+        p_name = data.get('project_name', '').strip()
+        image_raw = data.get('image')
+        video_raw = data.get('video')
+
+        if not all([label, name, desc, p_name, image_raw, video_raw]):
+            return jsonify({"success": False, "msg": "所有字段（标签、名称、描述、图片、视频）都必须填写！"})
+
+        if name in ["@new.character", "New Role"]:
+            return jsonify({"success": False, "msg": "请修改默认代号"})
+
+        # 上传处理
+        try:
+            img_val = ensure_url_logic(image_raw, max_size_mb=2.0)
+            vid_val = ensure_url_logic(video_raw, max_size_mb=10.0)
+        except ValueError as ve:
+            return jsonify({"success": False, "msg": str(ve)})
+        except Exception as e:
+            return jsonify({"success": False, "msg": f"文件上传失败: {str(e)}"})
+
+        conn = pymysql.connect(**MYSQL_CONF)
+        try:
+            with conn.cursor() as cursor:
+                char_id = data.get('id')
+                # 判断新增逻辑
+                if not char_id or str(char_id) == '0' or str(char_id) == 'NEW' or (
+                        str(char_id).isdigit() and int(char_id) > 10000000):
+                    sql = """
+                    INSERT INTO character_library (project_name, label, name, `desc`, image_url, video_url) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql, (p_name, label, name, desc, img_val, vid_val))
+                else:
+                    sql = """
+                    UPDATE character_library 
+                    SET project_name=%s, label=%s, name=%s, `desc`=%s, image_url=%s, video_url=%s 
+                    WHERE id=%s
+                    """
+                    cursor.execute(sql, (p_name, label, name, desc, img_val, vid_val, char_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Save Error: {e}")
+        return jsonify({"success": False, "msg": str(e)})
+
+
+# 2. 获取角色列表
+@app.route("/api/cloud/character/list", methods=['GET'])
+def get_character_list():
+    try:
+        project_name = request.args.get('project_name')
+        conn = pymysql.connect(**MYSQL_CONF)
+        try:
+            with conn.cursor() as cursor:
+                sql = "SELECT id, label, name, `desc`, image_url as image, video_url as video, project_name FROM character_library WHERE project_name = %s ORDER BY id DESC"
+                cursor.execute(sql, (project_name,))
+                result = cursor.fetchall()
+        finally:
+            conn.close()
+        return jsonify({"status": "success", "data": result})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": str(e)})
+
+
+# 3. 删除角色
+@app.route("/api/cloud/character/delete", methods=['POST'])
+def delete_character():
+    # 从环境变量获取密码
+    ADMIN_TOKEN = os.getenv("ADMIN_PASSWORD", "yunman_secret_888")
+    token = request.headers.get("X-Admin-Token")
+    if token != ADMIN_TOKEN:
+        return jsonify({"success": False, "msg": "口令错误"})
+
+    data = request.get_json()
+    char_id = data.get('id')
+
+    try:
+        conn = pymysql.connect(**MYSQL_CONF)
+        try:
+            with conn.cursor() as cursor:
+                # 尝试删除 COS 文件
+                sql_s = "SELECT image_url, video_url FROM character_library WHERE id = %s"
+                cursor.execute(sql_s, (char_id,))
+                record = cursor.fetchone()
+
+                if record and cos_client:
+                    for url in [record['image_url'], record['video_url']]:
+                        if url and CDN_DOMAIN in url:
+                            try:
+                                key = url.split('.com/')[-1]
+                                cos_client.delete_object(Bucket=TENCENT_BUCKET, Key=key)
+                            except:
+                                pass
+
+                cursor.execute("DELETE FROM character_library WHERE id = %s", (char_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "msg": str(e)})
 
 
 if __name__ == '__main__':
