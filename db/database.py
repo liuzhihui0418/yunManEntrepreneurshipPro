@@ -361,5 +361,75 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    # ================= 🚀 新增：一机一码(双端)验证逻辑 =================
+    def check_and_bind_device(self, code, device_id):
+        """
+        验证设备绑定状态
+        :param code: 邀请码
+        :param device_id: 前端传来的设备指纹
+        :return: {'success': True/False, 'msg': '提示信息'}
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 1. 锁定该行数据，防止并发问题 (FOR UPDATE)
+                sql = "SELECT bound_devices FROM invite_codes WHERE code = %s LIMIT 1 FOR UPDATE"
+                cursor.execute(sql, (code,))
+                result = cursor.fetchone()
+
+                if not result:
+                    return {'success': False, 'msg': '邀请码不存在'}
+
+                # 2. 解析当前绑定的设备列表
+                bound_devices_raw = result.get('bound_devices')
+
+                # 兼容 JSON 类型和 String 类型
+                if bound_devices_raw:
+                    if isinstance(bound_devices_raw, list):
+                        bound_list = bound_devices_raw
+                    elif isinstance(bound_devices_raw, str):
+                        try:
+                            bound_list = json.loads(bound_devices_raw)
+                        except:
+                            bound_list = []
+                    else:
+                        bound_list = []
+                else:
+                    bound_list = []
+
+                # ============ 核心策略配置 ============
+                MAX_DEVICES = 1  # 允许绑定的最大设备数
+                # ====================================
+
+                # 情况 A: 当前设备已经在名单里 -> 直接通过
+                if device_id in bound_list:
+                    return {'success': True, 'msg': '验证通过'}
+
+                # 情况 B: 不在名单里，但还有空位 -> 绑定并通过
+                if len(bound_list) < MAX_DEVICES:
+                    bound_list.append(device_id)
+                    new_json_str = json.dumps(bound_list)
+
+                    # 更新数据库
+                    update_sql = "UPDATE invite_codes SET bound_devices = %s WHERE code = %s"
+                    cursor.execute(update_sql, (new_json_str, code))
+                    conn.commit()
+                    print(f"✅ 邀请码 {code} 新绑定设备: {device_id}")
+                    return {'success': True, 'msg': '新设备绑定成功'}
+
+                # 情况 C: 名单满了，且是新设备 -> 拒绝
+                else:
+                    return {
+                        'success': False,
+                        'msg': f'登录失败：该邀请码已绑定 {len(bound_list)} 台设备，无法在当前新设备使用。'
+                    }
+
+        except Exception as e:
+            print(f"❌ 设备绑定检查出错: {e}")
+            return {'success': False, 'msg': '设备验证服务繁忙，请重试'}
+        finally:
+            conn.close()
+
+
 # 实例化在最后
 db_manager = DatabaseManager()

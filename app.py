@@ -374,8 +374,29 @@ def validate_invite_code():
     try:
         data = request.get_json()
         code = data.get('invite_code', '').strip().upper()
-        if not code: return jsonify({'success': False, 'message': '请输入邀请码'}), 400
+        # 1. 获取前端传来的 device_id (必须由前端生成并传递)
+        device_id = data.get('device_id', '').strip()
+
+        if not code:
+            return jsonify({'success': False, 'message': '请输入邀请码'}), 400
+
+        # 2. 强制要求传输设备指纹
+        if not device_id:
+            return jsonify({'success': False, 'message': '环境异常：无法识别设备指纹，请刷新页面重试'}), 400
+
+        # ================== 🚀 核心修改开始 ==================
+        # 3. 调用数据库进行设备绑定检查
+        # 只有这一步通过了，才去跑后面的 Redis 逻辑
+        bind_result = db_manager.check_and_bind_device(code, device_id)
+
+        if not bind_result['success']:
+            # 如果绑定失败（设备超限），直接返回 403 错误
+            return jsonify({'success': False, 'message': bind_result['msg']}), 403
+        # ================== 核心修改结束 ==================
+
+        # 4. 设备验证通过，继续执行原有的 Redis 验证逻辑 (次数、过期等)
         result = redis_manager.validate_and_use_code(code)
+
         if result['valid']:
             session_id = redis_manager.create_session(code)
             user_info = redis_manager.get_session_info(session_id)
@@ -390,7 +411,9 @@ def validate_invite_code():
             )
             return resp
         return jsonify({'success': False, 'message': result['message']}), 401
-    except Exception:
+
+    except Exception as e:
+        print(f"Login Error: {str(e)}")
         return jsonify({'success': False, 'message': '系统繁忙'}), 500
 
 
