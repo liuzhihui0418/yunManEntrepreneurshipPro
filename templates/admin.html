@@ -6,6 +6,7 @@
     <title>YunManGongFangAI</title>
     <link rel="icon" href="https://cdn.yunbaoymgf.chat/logo.png" type="image/png">
     <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary-color: #8b5cf6;
@@ -555,8 +556,12 @@
                         <h3>实时使用情况</h3>
                         <div class="table-actions">
                             <button class="btn btn-outline">
-                                <i class="fa-solid fa-download"></i>导出
-                            </button>
+    <i class="fa-solid fa-download"></i>导出
+</button>
+
+<button class="btn btn-outline" onclick="exportUsageData()">
+    <i class="fa-solid fa-download"></i>导出 Excel
+</button>
                         </div>
                     </div>
                     <table>
@@ -566,7 +571,7 @@
                                 <th>创建时间</th>
                                 <th>过期时间</th>
                                 <th>状态</th>
-                                <th>使用次数</th>
+                                <th>绑定设备</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -709,7 +714,87 @@
             </form>
         </div>
     </div>
+<div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑邀请码</h3>
+                <button class="modal-close" onclick="hideEditModal()">&times;</button>
+            </div>
+            <form id="editCodeForm">
+                <input type="hidden" id="editCodeValue">
 
+                <div class="form-group">
+                    <label class="form-label">当前邀请码</label>
+                    <input type="text" class="form-input" id="editCodeDisplay" disabled style="opacity: 0.7;">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">修改过期时间</label>
+                    <input type="date" class="form-input" id="editExpiryDate">
+                    <small style="color: rgba(255,255,255,0.5); font-size: 12px;">留空则不修改时间</small>
+                </div>
+
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                    <input type="checkbox" id="resetDeviceCheck" style="width: 20px; height: 20px;">
+                    <div>
+                        <label for="resetDeviceCheck" style="font-weight: bold; cursor: pointer;">重置设备绑定</label>
+                        <div style="font-size: 12px; color: rgba(255,255,255,0.6);">勾选后将清空该码绑定的所有设备，允许新设备登录</div>
+                    </div>
+                </div>
+
+                <div class="form-actions" style="display: flex; gap: 15px; margin-top: 25px;">
+                    <button type="button" class="btn btn-outline" onclick="hideEditModal()" style="flex: 1;">取消</button>
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">保存修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="modal" id="viewModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>邀请码详情</h3>
+                <button class="modal-close" onclick="hideViewModal()">&times;</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-size: 12px; color: rgba(255,255,255,0.5);">邀请码</label>
+                        <div id="viewCodeDisplay" style="font-size: 18px; font-weight: bold; font-family: monospace; color: var(--primary-color);"></div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-size: 12px; color: rgba(255,255,255,0.5);">到期时间</label>
+                        <div id="viewExpiryDisplay" style="font-size: 16px;"></div>
+                    </div>
+                </div>
+
+                <div style="height: 1px; background: var(--glass-border);"></div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label class="form-label" style="margin-bottom: 0;">已绑定设备列表</label>
+                        <span id="viewDeviceCount" class="status-badge status-active">0 台</span>
+                    </div>
+
+                    <div id="viewDeviceList" style="
+                        background: rgba(0, 0, 0, 0.4);
+                        border: 1px solid var(--glass-border);
+                        border-radius: 10px;
+                        padding: 10px;
+                        max-height: 250px;
+                        overflow-y: auto;
+                        font-family: monospace;
+                        font-size: 13px;
+                    ">
+                        </div>
+                </div>
+
+                <div class="form-actions" style="margin-top: 10px; text-align: right;">
+                    <button type="button" class="btn btn-primary" onclick="hideViewModal()">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         /**
          * 1. 动态粒子背景特效
@@ -1018,25 +1103,98 @@ async function loadDashboardData() {
                 return;
             }
 
-            tbody.innerHTML = usageData.map(item => `
-                <tr>
-                    <td>${item.code || 'N/A'}</td>
-                    <td>${item.created_at ? new Date(item.created_at).toLocaleString() : '未知'}</td>
-                    <td>${item.expires_at ? new Date(item.expires_at).toLocaleString() : '永久'}</td>
-                    <td><span class="status-badge ${getStatusClass(item)}">${getStatusText(item)}</span></td>
-                    <td>${item.current_uses || 0}</td>
-                    <td>
-                        <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
-                                onclick="viewUsageDetails('${item.code}')" title="查看详情">
-                            <i class="fa-solid fa-eye"></i> 查看
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = usageData.map(item => {
+        // 解析绑定设备
+        let deviceDisplay = '<span style="color:rgba(255,255,255,0.3)">无</span>';
+        if (item.bound_devices) {
+            try {
+                // 兼容字符串JSON和数组对象
+                const devices = typeof item.bound_devices === 'string' ? JSON.parse(item.bound_devices) : item.bound_devices;
+                if (Array.isArray(devices) && devices.length > 0) {
+                    deviceDisplay = `<span class="status-badge status-active" title="${devices.join('\n')}">已绑 ${devices.length} 台</span>`;
+                }
+            } catch(e) {}
         }
 
-        function viewUsageDetails(code) {
-            alert(`查看邀请码 ${code} 的使用详情 - 功能待实现`);
+        return `
+        <tr>
+            <td>${item.code || 'N/A'}</td>
+            <td>${item.created_at ? new Date(item.created_at).toLocaleString() : '未知'}</td>
+            <td>${item.expires_at ? new Date(item.expires_at).toLocaleString() : '永久'}</td>
+            <td><span class="status-badge ${getStatusClass(item)}">${getStatusText(item)}</span></td>
+            <td>${deviceDisplay}</td> <td>
+                <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
+                        onclick="viewUsageDetails('${item.code}')" title="查看详情">
+                    <i class="fa-solid fa-eye"></i> 查看
+                </button>
+            </td>
+        </tr>
+    `}).join('');
+}
+
+        // ================= 🚀 新增：查看详情弹窗逻辑 =================
+
+        // 打开查看详情弹窗
+        window.viewUsageDetails = function(code) {
+            // 1. 从当前页面的缓存数据中找到这条记录
+            // 注意：这里使用的是 usage (数据看板) 的数据源
+            const item = paginationConfig.usage.data.find(i => i.code === code);
+
+            if (!item) {
+                showNotification('未找到该邀请码数据', 'error');
+                return;
+            }
+
+            // 2. 填充基础信息
+            document.getElementById('viewCodeDisplay').textContent = item.code;
+            document.getElementById('viewExpiryDisplay').textContent = item.expires_at ? new Date(item.expires_at).toLocaleString() : '永久有效';
+
+            // 3. 解析并渲染设备列表
+            const deviceListEl = document.getElementById('viewDeviceList');
+            const countEl = document.getElementById('viewDeviceCount');
+
+            let devices = [];
+            try {
+                // 解析数据库里的 JSON 字符串
+                if (item.bound_devices) {
+                    devices = typeof item.bound_devices === 'string' ? JSON.parse(item.bound_devices) : item.bound_devices;
+                }
+            } catch (e) {
+                console.error("解析设备JSON失败", e);
+            }
+
+            // 更新数量角标
+            countEl.textContent = (devices ? devices.length : 0) + ' 台';
+
+            // 渲染列表 HTML
+            if (devices && devices.length > 0) {
+                deviceListEl.innerHTML = devices.map((devId, index) => `
+                    <div style="
+                        padding: 8px;
+                        border-bottom: 1px solid rgba(255,255,255,0.05);
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    ">
+                        <span style="color: var(--primary-color); opacity: 0.7;">#${index + 1}</span>
+                        <span style="word-break: break-all; color: #fff;">${devId}</span>
+                    </div>
+                `).join('');
+            } else {
+                deviceListEl.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: rgba(255,255,255,0.3);">
+                        <i class="fa-solid fa-mobile-screen" style="font-size: 24px; margin-bottom: 5px;"></i>
+                        <div>暂无绑定设备</div>
+                    </div>
+                `;
+            }
+
+            // 4. 显示弹窗
+            document.getElementById('viewModal').style.display = 'flex';
+        }
+
+        function hideViewModal() {
+            document.getElementById('viewModal').style.display = 'none';
         }
 
         // 加载邀请码列表 - 使用真实API
@@ -1106,6 +1264,7 @@ async function loadDashboardData() {
         }
 
         // 更新邀请码表格
+        // 更新邀请码表格
         function updateCodesTable(codes) {
             const tbody = document.getElementById('codes-table-body');
 
@@ -1121,7 +1280,11 @@ async function loadDashboardData() {
                 return;
             }
 
-            tbody.innerHTML = codes.map(code => `
+            tbody.innerHTML = codes.map(code => {
+                // 格式化一下日期字符串，以便传给 JS 函数
+                let expireStr = code.expires_at ? code.expires_at.split(' ')[0] : ''; // 取出 YYYY-MM-DD
+
+                return `
                 <tr>
                     <td>${code.code || 'N/A'}</td>
                     <td>${code.created_at ? new Date(code.created_at).toLocaleString() : '未知'}</td>
@@ -1134,7 +1297,7 @@ async function loadDashboardData() {
                     <td>${calculateRemainingDays(code.expires_at)}</td>
                     <td>
                         <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
-                                onclick="editCode('${code.code}')" title="编辑">
+                                onclick="editCode('${code.code}', '${expireStr}')" title="编辑">
                             <i class="fa-solid fa-edit"></i>
                         </button>
                         <button class="btn btn-outline" style="padding: 5px 10px; font-size: 12px;"
@@ -1143,7 +1306,7 @@ async function loadDashboardData() {
                         </button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
 
         // 分页相关函数
@@ -1455,6 +1618,146 @@ async function loadDashboardData() {
             updateUsagePagination();
             updateCodesPagination();
         });
+// ================= 🚀 新增：编辑与删除 JS 逻辑 =================
+
+        // 1. 显示编辑模态框
+        window.editCode = function(code, expiryDate) {
+            document.getElementById('editModal').style.display = 'flex';
+            document.getElementById('editCodeValue').value = code;
+            document.getElementById('editCodeDisplay').value = code;
+            document.getElementById('editExpiryDate').value = expiryDate || ''; // 填入当前日期
+            document.getElementById('resetDeviceCheck').checked = false; // 默认不勾选
+        }
+
+        function hideEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        // 2. 提交编辑表单
+        document.getElementById('editCodeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const code = document.getElementById('editCodeValue').value;
+            const newExpiry = document.getElementById('editExpiryDate').value;
+            const resetDevice = document.getElementById('resetDeviceCheck').checked;
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerText;
+            submitBtn.innerText = '保存中...';
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/admin/codes/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        code: code,
+                        new_expiry: newExpiry,
+                        reset_device: resetDevice
+                    })
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    showNotification('更新成功', 'success');
+                    hideEditModal();
+                    loadCodesData(); // 刷新列表
+                } else {
+                    showNotification(res.message, 'error');
+                }
+            } catch (err) {
+                showNotification('请求失败: ' + err.message, 'error');
+            } finally {
+                submitBtn.innerText = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+
+        // 3. 删除邀请码逻辑
+        window.deleteCode = async function(code) {
+            if (!confirm(`⚠️ 警告：确定要彻底删除邀请码 [${code}] 吗？\n删除后该码将无法再使用，且无法恢复！`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/codes/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ code: code })
+                });
+                const res = await response.json();
+
+                if (res.success) {
+                    showNotification('删除成功', 'success');
+                    loadCodesData(); // 刷新列表
+                    loadDashboardData(); // 刷新看板统计
+                } else {
+                    showNotification(res.message, 'error');
+                }
+            } catch (err) {
+                showNotification('请求失败: ' + err.message, 'error');
+            }
+        }
+        // ================= 🚀 新增：导出 Excel 逻辑 =================
+
+        function exportUsageData() {
+            // 1. 获取要导出的数据
+            // 这里我们导出当前页的数据，如果你想导出所有数据，可能需要请求后端的一个新接口
+            // 暂时先导出当前页展示的数据
+            const data = paginationConfig.usage.data;
+
+            if (!data || data.length === 0) {
+                showNotification('暂无数据可导出', 'warning');
+                return;
+            }
+
+            // 2. 格式化数据，变成 Excel 需要的二维数组或对象数组
+            const exportData = data.map(item => {
+                let status = '未知';
+                if (!item.is_active) status = '已禁用';
+                else if (item.expires_at && new Date(item.expires_at) < new Date()) status = '已过期';
+                else status = '有效';
+
+                let devices = '无';
+                try {
+                    if (item.bound_devices) {
+                        const d = typeof item.bound_devices === 'string' ? JSON.parse(item.bound_devices) : item.bound_devices;
+                        if (Array.isArray(d)) devices = d.join(', ');
+                    }
+                } catch (e) {}
+
+                return {
+                    "邀请码": item.code,
+                    "创建时间": item.created_at,
+                    "过期时间": item.expires_at || '永久',
+                    "状态": status,
+                    "绑定设备列表": devices
+                };
+            });
+
+            // 3. 创建工作簿和工作表
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(exportData);
+
+            // 4. 设置列宽 (可选)
+            const wscols = [
+                {wch: 20}, // 邀请码
+                {wch: 20}, // 创建时间
+                {wch: 20}, // 过期时间
+                {wch: 10}, // 状态
+                {wch: 50}  // 设备列表
+            ];
+            ws['!cols'] = wscols;
+
+            // 5. 将工作表添加到工作簿
+            XLSX.utils.book_append_sheet(wb, ws, "使用数据");
+
+            // 6. 生成文件名并下载
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `邀请码使用数据_${dateStr}.xlsx`);
+
+            showNotification('导出成功', 'success');
+        }
     </script>
 </body>
 </html>

@@ -456,5 +456,111 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    # ================= 🚀 新增：编辑与删除逻辑 =================
+
+    def update_invite_code(self, code, new_expiry_str=None, reset_device=False):
+        """
+        更新邀请码：修改过期时间 或 解绑设备
+        """
+        # 【修复引用】
+        from db.redis_manager import redis_manager
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # 1. 如果需要解绑设备，将 bound_devices 重置为 "[]"
+                if reset_device:
+                    cursor.execute("UPDATE invite_codes SET bound_devices = '[]' WHERE code = %s", (code,))
+
+                # 2. 如果提供了新的过期时间
+                if new_expiry_str:
+                    # 前端传来的通常是 '2024-12-31' 格式，我们加上时间变成 '2024-12-31 23:59:59'
+                    if len(new_expiry_str) == 10:
+                        new_expiry_str += " 23:59:59"
+                    cursor.execute("UPDATE invite_codes SET expires_at = %s WHERE code = %s", (new_expiry_str, code))
+
+                conn.commit()
+
+                # 清除缓存
+                try:
+                    redis_manager.r.delete("admin:codes_list")
+                    # 删除以 admin:codes_list_page 开头的分页缓存
+                    keys = redis_manager.r.keys("admin:codes_list_page*")
+                    if keys: redis_manager.r.delete(*keys)
+                except:
+                    pass
+                return True
+        except Exception as e:
+            print(f"更新邀请码失败: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def delete_invite_code(self, code):
+        """
+        删除邀请码
+        """
+        # 【修复引用】
+        from db.redis_manager import redis_manager
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM invite_codes WHERE code = %s", (code,))
+                conn.commit()
+
+                # 清除缓存
+                try:
+                    redis_manager.r.delete("admin:dashboard_stats")
+                    redis_manager.r.delete("admin:total_codes_count")
+                    # 删除分页缓存
+                    keys = redis_manager.r.keys("admin:codes_list_page*")
+                    if keys: redis_manager.r.delete(*keys)
+                except:
+                    pass
+                return True
+        except Exception as e:
+            print(f"删除失败: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ================= 🚀 新增：检查设备绑定一致性 =================
+    def check_device_consistency(self, code, device_id):
+        """
+        检查当前请求的设备ID，是否在数据库的白名单里
+        用于防止：后台解绑后，老设备依然在线的问题
+        """
+        conn = self.get_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                sql = "SELECT bound_devices FROM invite_codes WHERE code = %s"
+                cursor.execute(sql, (code,))
+                result = cursor.fetchone()
+
+                if not result or not result['bound_devices']:
+                    return False  # 码不存在或没有任何绑定设备（说明被解绑了）
+
+                bound_list = []
+                try:
+                    # 兼容 JSON 字符串和 List 对象
+                    raw = result['bound_devices']
+                    if isinstance(raw, str):
+                        bound_list = json.loads(raw)
+                    elif isinstance(raw, list):
+                        bound_list = raw
+                except:
+                    return False
+
+                # 核心判断：当前 Session 里的设备 ID，必须在数据库绑定列表里
+                if device_id in bound_list:
+                    return True
+                return False
+        except Exception as e:
+            print(f"设备一致性检查失败: {e}")
+            return False
+        finally:
+            conn.close()
+
 # 实例化在最后
 db_manager = DatabaseManager()

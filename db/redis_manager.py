@@ -159,11 +159,12 @@ class RedisManager:
         return False
 
     # --- Session 管理 (保持不变) ---
-    def create_session(self, invite_code):
+    def create_session(self, invite_code, device_id): # <--- 增加 device_id 参数
         session_id = str(uuid.uuid4())
         session_key = f"sess:{session_id}"
         user_info = {
             "code": invite_code,
+            "device_id": device_id, # <--- 将设备指纹存入 Session
             "name": f"用户{hash(invite_code) % 1000}",
             "avatar": "default.png",
             "login_at": time.time()

@@ -184,20 +184,18 @@ def favicon():
 @app.route('/')
 def index():
     session_id = request.cookies.get('session_id')
-
-    # === 修改开始：增加双重验证 ===
     if session_id and redis_manager.validate_session(session_id):
-        # 1. Session 有效，取出里面的 invite_code
         user_info = redis_manager.get_session_info(session_id)
         if user_info:
             code = user_info.get('code')
-            # 2. 去数据库查一下这个码过期没
-            if db_manager.check_code_is_valid_strict(code):
+            device_id = user_info.get('device_id')
+
+            # 同时检查：没过期 AND 设备依然在绑定列表里
+            if db_manager.check_code_is_valid_strict(code) and \
+                    db_manager.check_device_consistency(code, device_id):
                 return render_template('index.html')
             else:
-                # 如果过期了，销毁 Session
                 redis_manager.destroy_session(session_id)
-    # === 修改结束 ===
 
     return render_template('login.html')
 
@@ -386,43 +384,29 @@ def validate_invite_code():
     try:
         data = request.get_json()
         code = data.get('invite_code', '').strip().upper()
-        # 1. 获取前端传来的 device_id (必须由前端生成并传递)
-        device_id = data.get('device_id', '').strip()
+        device_id = data.get('device_id', '').strip()  # 获取设备ID
 
-        if not code:
-            return jsonify({'success': False, 'message': '请输入邀请码'}), 400
+        if not code: return jsonify({'success': False, 'message': '请输入邀请码'}), 400
+        if not device_id: return jsonify({'success': False, 'message': '环境异常：无法识别设备'}), 400
 
-        # 2. 强制要求传输设备指纹
-        if not device_id:
-            return jsonify({'success': False, 'message': '环境异常：无法识别设备指纹，请刷新页面重试'}), 400
-
-        # ================== 🚀 核心修改开始 ==================
-        # 3. 调用数据库进行设备绑定检查
-        # 只有这一步通过了，才去跑后面的 Redis 逻辑
+        # 1. 数据库绑定检查 (一机一码)
         bind_result = db_manager.check_and_bind_device(code, device_id)
-
         if not bind_result['success']:
-            # 如果绑定失败（设备超限），直接返回 403 错误
             return jsonify({'success': False, 'message': bind_result['msg']}), 403
-        # ================== 核心修改结束 ==================
 
-        # 4. 设备验证通过，继续执行原有的 Redis 验证逻辑 (次数、过期等)
-        result = redis_manager.validate_and_use_code(code)
+        # 2. 有效期检查
+        is_valid = db_manager.check_code_is_valid_strict(code)
 
-        if result['valid']:
-            session_id = redis_manager.create_session(code)
+        if is_valid:
+            # 3. 创建 Session (注意：这里传入了 device_id)
+            session_id = redis_manager.create_session(code, device_id)
             user_info = redis_manager.get_session_info(session_id)
+
             resp = jsonify({'success': True, 'session_id': session_id, 'user': user_info, 'message': '成功'})
-            resp.set_cookie(
-                'session_id',
-                session_id,
-                max_age=86400,
-                httponly=True,
-                samesite='None',
-                secure=True
-            )
+            resp.set_cookie('session_id', session_id, max_age=86400, httponly=True, samesite='None', secure=True)
             return resp
-        return jsonify({'success': False, 'message': result['message']}), 401
+        else:
+            return jsonify({'success': False, 'message': '邀请码不存在、已禁用或已过期'}), 401
 
     except Exception as e:
         print(f"Login Error: {str(e)}")
@@ -562,13 +546,23 @@ def check_session():
     if session_id:
         user_info = redis_manager.get_session_info(session_id)
         if user_info:
-            # === 修改开始：增加实时过期检查 ===
             code = user_info.get('code')
-            # 如果数据库里显示已过期/禁用，直接踢下线
+            device_id = user_info.get('device_id')  # 从 Session 拿出当时登录的设备ID
+
+            # === 🚀 双重核心校验 ===
+
+            # 1. 校验是否过期
             if not db_manager.check_code_is_valid_strict(code):
                 redis_manager.destroy_session(session_id)
                 return jsonify({'valid': False})
-            # === 修改结束 ===
+
+            # 2. 校验设备是否还绑定着 (解决你说的解绑不掉线问题)
+            # 如果后台把设备解绑了，这里就会返回 False，直接踢下线
+            if not db_manager.check_device_consistency(code, device_id):
+                redis_manager.destroy_session(session_id)
+                return jsonify({'valid': False})
+
+            # =====================
 
             return jsonify({'valid': True, 'user': user_info})
     return jsonify({'valid': False})
@@ -594,6 +588,50 @@ def admin_login_page(): return render_template('admin_login.html')
 @app.route('/admin/codes', methods=['GET'])
 def get_codes_list():
     return jsonify({'success': True, 'codes': db_manager.get_all_codes()})
+
+
+# ================= 🚀 新增：编辑与删除接口 =================
+
+@app.route('/admin/codes/update', methods=['POST'])
+def update_code_api():
+    """编辑邀请码接口"""
+    # 鉴权
+    if not request.cookies.get('admin_token'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    data = request.get_json()
+    code = data.get('code')
+    new_expiry = data.get('new_expiry')  # 格式 "2025-01-01"
+    reset_device = data.get('reset_device')  # Boolean True/False
+
+    if not code:
+        return jsonify({'success': False, 'message': '参数缺失'})
+
+    success = db_manager.update_invite_code(code, new_expiry, reset_device)
+    if success:
+        return jsonify({'success': True, 'message': '更新成功'})
+    else:
+        return jsonify({'success': False, 'message': '更新失败，请检查服务器日志'})
+
+
+@app.route('/admin/codes/delete', methods=['POST'])
+def delete_code_api():
+    """删除邀请码接口"""
+    # 鉴权
+    if not request.cookies.get('admin_token'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    data = request.get_json()
+    code = data.get('code')
+
+    if not code:
+        return jsonify({'success': False, 'message': '参数缺失'})
+
+    success = db_manager.delete_invite_code(code)
+    if success:
+        return jsonify({'success': True, 'message': '删除成功'})
+    else:
+        return jsonify({'success': False, 'message': '删除失败'})
 
 
 # ==========================================
