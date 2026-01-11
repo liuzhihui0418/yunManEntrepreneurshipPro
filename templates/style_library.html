@@ -264,7 +264,8 @@
         {label: '其他角色', value: 'default'}
     ];
 
-    let charList = [];
+    let allCharList = []; // 🟢 新增：用来存储从服务器拉取的所有数据
+    let charList = [];    // 🔵 保持：用来存储当前分类下，经过筛选的数据
     let currentCategory = 'ancient';
     let searchQuery = '';
     let currentPage = 1;
@@ -298,30 +299,51 @@
     }
 
     async function loadData() {
-    try {
-        // 修改前：
-        // const res = await fetch(`${API_BASE}/character/list?project_name=${currentCategory}`);
+        try {
+            // 🟢 变化1：请求时不带参数了，一次性拉取所有
+            const res = await fetch(`${API_BASE}/character/list`);
+            const json = await res.json();
+            if (json.status === 'success') {
+                // 🟢 变化2：把数据存入总仓库
+                allCharList = json.data || [];
 
-        // 修改后：直接请求接口地址，不带问号后面的参数
-        const res = await fetch(`${API_BASE}/character/list`);
+                // 🟢 变化3：拉取完数据后，立刻执行一次筛选和渲染
+                filterAndRender();
 
-        const json = await res.json();
-        if (json.status === 'success') {
-            charList = json.data || [];
-            currentPage = 1;
-            renderAll();
+                // 提示：可以在这里加个 Toast 提示刷新成功
+                console.log("数据已更新，共", allCharList.length, "条");
+            }
+        } catch (e) {
+            console.error("加载数据失败:", e);
+            alert("数据加载失败，请检查网络");
         }
-    } catch (e) {
-        console.error("加载数据失败:", e);
     }
-}
 
+    // 🟢 新增函数：纯前端筛选逻辑
+    function filterAndRender() {
+        // 从总仓库(allCharList)中，找出符合当前分类(currentCategory)的数据
+        // 并赋值给 charList，这样 renderAll 就能显示出来了
+        charList = allCharList.filter(item => item.project_name === currentCategory);
+
+        // 重置页码到第一页
+        currentPage = 1;
+
+        // 执行原本的渲染逻辑（包含搜索和分页）
+        renderAll();
+    }
+
+    // 🔵 修改后的切换分类函数
     function switchCategory(val) {
         currentCategory = val;
-        document.getElementById('current-label').innerText = categories.find(c => c.value === val).label;
-        currentPage = 1;
+        // 更新顶部显示的文字
+        const label = categories.find(c => c.value === val)?.label || '未知';
+        document.getElementById('current-label').innerText = label;
+
+        // 更新 Tab 按钮的样式
         renderTabs();
-        loadData();
+
+        // 🟢 关键变化：不再调用 loadData() 请求服务器，而是直接前端筛选
+        filterAndRender();
     }
 
     function renderAll() {
@@ -456,7 +478,11 @@
             const result = await res.json();
             if (result.success) {
                 alert("删除成功");
+
+                // 🟢 变化：同时从两个数组中移除该 ID
                 charList = charList.filter(c => c.id !== id);
+                allCharList = allCharList.filter(c => c.id !== id); // 这一行必须要加
+
                 renderAll();
             } else {
                 alert(result.msg);
