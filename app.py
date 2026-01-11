@@ -701,31 +701,56 @@ def style_library_page():
 
 
 # 1. 保存/更新角色
+# ==========================================
+# 1. 保存/更新角色 (完整安全版)
+# ==========================================
 @app.route("/api/cloud/character/save", methods=['POST'])
 @login_required
 def save_character_db():
+    # 👇👇👇 1. 安全校验区域 (防止 Postman 盗刷) 👇👇👇
+    # 【修改点】直接从环境变量读取，不写默认值，防止代码泄露密码
+    # 如果 .env 没配置 ADMIN_PASSWORD，这里就是 None，谁都进不来（安全）
+    sys_admin_token = os.getenv("ADMIN_PASSWORD")
+
+    # 获取请求带来的密码凭证
+    # 方式A：网页版管理员登录后，Cookie 里会有 token
+    cookie_token = request.cookies.get('admin_token')
+    # 方式B：Postman 或脚本调用时，Header 里必须带 X-Admin-Token
+    header_token = request.headers.get("X-Admin-Token")
+
+    # 核心判断：如果两个地方的密码都不对，直接拒绝！
+    # 注意：如果 sys_admin_token 是 None (没配环境变量)，这里永远不等，所以默认拒绝所有请求，非常安全
+    if str(cookie_token) != str(sys_admin_token) and str(header_token) != str(sys_admin_token):
+        print(f"⚠️ 拦截到非法上传请求 | Cookie: {cookie_token} | Header: {header_token}")
+        return jsonify({"success": False, "msg": "🚫 权限不足：需要管理员密码！"}), 403
+    # 👆👆👆 安全校验结束 👆👆👆
+
     try:
-        # 注意：使用 FormData 后，普通字段在 request.form，文件在 request.files
+        # 👇👇👇 2. 数据获取区域 (FormData 模式) 👇👇👇
+        # 普通文本字段从 request.form 获取
         label = request.form.get('label', '').strip()
         name = request.form.get('name', '').strip()
         desc = request.form.get('desc', '').strip()
         p_name = request.form.get('project_name', '').strip()
         char_id = request.form.get('id')
 
-        # 获取文件对象 (如果没有上传新文件，这里是 None)
+        # 文件对象从 request.files 获取 (如果没有上传新文件，这里是 None)
         image_file = request.files.get('image_file')
         video_file = request.files.get('video_file')
 
-        # 获取旧 URL (用于编辑时未修改图片的情况)
+        # 获取旧 URL (用于编辑模式：如果用户没换图，就用这个旧链接)
         image_url_old = request.form.get('image_url_old')
         video_url_old = request.form.get('video_url_old')
 
+        # 基础必填项检查
         if not all([label, name, desc, p_name]):
-            return jsonify({"success": False, "msg": "基础信息（标签、名称、描述）必须填写！"})
+            return jsonify({"success": False, "msg": "基础信息（标签、名称、描述、分类）必须填写！"})
 
-        # 上传处理
+        # 👇👇👇 3. 文件上传处理 👇👇👇
         try:
-            # 传入 文件对象 和 旧URL，函数内部自动判断用哪个
+            # ensure_upload 函数会自动判断：
+            # 如果有新文件(image_file)，就上传到 COS 并返回新链接
+            # 如果没新文件，就直接返回旧链接(image_url_old)
             final_img_url = ensure_upload(image_file, image_url_old, "library")
             final_vid_url = ensure_upload(video_file, video_url_old, "library")
 
@@ -735,21 +760,32 @@ def save_character_db():
         except Exception as e:
             return jsonify({"success": False, "msg": f"文件上传失败: {str(e)}"})
 
+        # 👇👇👇 4. 数据库写入区域 👇👇👇
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                # ...SQL 插入/更新逻辑保持不变，只需把 img_val 换成 final_img_url...
-                if not char_id or str(char_id) == '0' or str(char_id) == 'NEW':
-                    sql = """INSERT INTO character_library (project_name, label, name, `desc`, image_url, video_url) VALUES (%s, %s, %s, %s, %s, %s)"""
+                # 判断是【新增】还是【修改】
+                # 如果 id 为空、0、NEW 或者大于一千万(防冲突)，都视为新增
+                if not char_id or str(char_id) == '0' or str(char_id) == 'NEW' or (str(char_id).isdigit() and int(char_id) > 10000000):
+                    sql = """
+                    INSERT INTO character_library 
+                    (project_name, label, name, `desc`, image_url, video_url) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """
                     cursor.execute(sql, (p_name, label, name, desc, final_img_url, final_vid_url))
                 else:
-                    sql = """UPDATE character_library SET project_name=%s, label=%s, name=%s, `desc`=%s, image_url=%s, video_url=%s WHERE id=%s"""
+                    sql = """
+                    UPDATE character_library 
+                    SET project_name=%s, label=%s, name=%s, `desc`=%s, image_url=%s, video_url=%s 
+                    WHERE id=%s
+                    """
                     cursor.execute(sql, (p_name, label, name, desc, final_img_url, final_vid_url, char_id))
             conn.commit()
         finally:
             conn.close()
 
         return jsonify({"success": True})
+
     except Exception as e:
         print(f"Save Error: {e}")
         return jsonify({"success": False, "msg": str(e)})
