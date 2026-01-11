@@ -33,8 +33,8 @@ load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
-# 允许所有来源跨域
-CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
+# 假设你的前端域名是 ai.yunmanybcz.chat
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": ["https://ai.yunmanybcz.chat", "http://localhost:5000"]}})
 
 # ==========================================
 # 1. 全局配置与密钥 (已改为从环境变量读取)
@@ -165,6 +165,38 @@ def ensure_url_logic(data_str: str, max_size_mb: float, sub_folder: str = "libra
             raise e
     return None
 
+
+from functools import wraps
+
+
+# 定义登录校验装饰器
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 1. 获取 Session ID
+        session_id = request.cookies.get('session_id')
+
+        # 2. 基础 Redis 校验
+        if not session_id or not redis_manager.validate_session(session_id):
+            return jsonify({"status": "error", "msg": "未登录或会话已过期"}), 401
+
+        # 3. 获取用户信息
+        user_info = redis_manager.get_session_info(session_id)
+        if not user_info:
+            return jsonify({"status": "error", "msg": "用户信息获取失败"}), 401
+
+        code = user_info.get('code')
+        device_id = user_info.get('device_id')
+
+        # 4. 严格校验 (数据库 + 设备绑定)
+        if not db_manager.check_code_is_valid_strict(code) or \
+                not db_manager.check_device_consistency(code, device_id):
+            redis_manager.destroy_session(session_id)
+            return jsonify({"status": "error", "msg": "授权验证失败，请重新登录"}), 401
+
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 # ================= 基础路由 =================
 
@@ -670,6 +702,7 @@ def style_library_page():
 
 # 1. 保存/更新角色
 @app.route("/api/cloud/character/save", methods=['POST'])
+@login_required  # <--- 🔥🔥 必须加上这一行！
 def save_character_db():
     try:
         data = request.get_json()
@@ -726,7 +759,9 @@ def save_character_db():
 
 
 # 2. 获取角色列表
+# 修改后：加上装饰器
 @app.route("/api/cloud/character/list", methods=['GET'])
+@login_required  # <--- 加上这一行！
 def get_character_list():
     try:
         project_name = request.args.get('project_name')
@@ -745,6 +780,7 @@ def get_character_list():
 
 # 3. 删除角色
 @app.route("/api/cloud/character/delete", methods=['POST'])
+@login_required  # <--- 🔥🔥 建议加上这一行！
 def delete_character():
     # 从环境变量获取密码
     ADMIN_TOKEN = os.getenv("ADMIN_PASSWORD", "yunman_secret_888")
