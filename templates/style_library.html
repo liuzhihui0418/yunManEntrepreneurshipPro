@@ -298,18 +298,23 @@
     }
 
     async function loadData() {
-        try {
-            const res = await fetch(`${API_BASE}/character/list?project_name=${currentCategory}`);
-            const json = await res.json();
-            if (json.status === 'success') {
-                charList = json.data || [];
-                currentPage = 1;
-                renderAll();
-            }
-        } catch (e) {
-            console.error("加载数据失败:", e);
+    try {
+        // 修改前：
+        // const res = await fetch(`${API_BASE}/character/list?project_name=${currentCategory}`);
+
+        // 修改后：直接请求接口地址，不带问号后面的参数
+        const res = await fetch(`${API_BASE}/character/list`);
+
+        const json = await res.json();
+        if (json.status === 'success') {
+            charList = json.data || [];
+            currentPage = 1;
+            renderAll();
         }
+    } catch (e) {
+        console.error("加载数据失败:", e);
     }
+}
 
     function switchCategory(val) {
         currentCategory = val;

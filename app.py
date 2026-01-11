@@ -170,9 +170,27 @@ from functools import wraps
 
 
 # 定义登录校验装饰器
+# 定义内部 API 调用密钥 (建议去 .env 文件里配置这个变量，这里是默认值)
+# ⚠️ 注意：请把 "yunman_2026_super_key" 改成只有您自己知道的复杂密码
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "yunman_2026_super_key")
+
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # =================================================
+        # 🟢 新增逻辑：API Key 绿色通道
+        # =================================================
+        # 获取请求头中的 X-API-Key
+        request_key = request.headers.get('X-API-Key')
+
+        # 如果 Key 存在且正确，直接放行，跳过后续所有 Session 检查
+        if request_key and request_key == INTERNAL_API_KEY:
+            return f(*args, **kwargs)
+        # =================================================
+
+        # 👇👇👇 下面是您原本的逻辑 (保持不变) 👇👇👇
+
         # 1. 获取 Session ID
         session_id = request.cookies.get('session_id')
 
@@ -761,15 +779,21 @@ def save_character_db():
 # 2. 获取角色列表
 # 修改后：加上装饰器
 @app.route("/api/cloud/character/list", methods=['GET'])
-@login_required  # <--- 加上这一行！
+@login_required
 def get_character_list():
     try:
-        project_name = request.args.get('project_name')
+        # 1. 这行不要了
+        # project_name = request.args.get('project_name')
+
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                sql = "SELECT id, label, name, `desc`, image_url as image, video_url as video, project_name FROM character_library WHERE project_name = %s ORDER BY id DESC"
-                cursor.execute(sql, (project_name,))
+                # 2. SQL语句修改：删掉了 WHERE project_name = %s
+                sql = "SELECT id, label, name, `desc`, image_url as image, video_url as video, project_name FROM character_library ORDER BY id DESC"
+
+                # 3. 执行修改：删掉了后面的参数 (project_name,)
+                cursor.execute(sql)
+
                 result = cursor.fetchall()
         finally:
             conn.close()
