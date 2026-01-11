@@ -140,6 +140,13 @@
             <i data-lucide="refresh-cw" class="w-5 h-5 text-[#00d1a0]"></i>
             <span class="font-black tracking-wider text-[#00d1a0]">刷新列表</span>
         </button>
+
+        <button onclick="openAddModal()"
+        class="ml-4 group relative flex items-center gap-3 px-8 py-3.5 bg-[#00d1a0] border border-[#00d1a0] rounded-lg hover:bg-[#00ffc3] hover:shadow-[0_0_30px_rgba(0,209,160,0.5)] active:scale-95 transition-all">
+    <i data-lucide="plus" class="w-5 h-5 text-black"></i>
+    <span class="font-black tracking-wider text-black">新增角色</span>
+</button>
+
     </div>
 
     <div id="grid-container"
@@ -242,7 +249,92 @@
         </div>
     </div>
 </div>
+<div id="add-modal" class="fixed inset-0 z-[200] flex items-center justify-center pointer-events-auto hidden">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeAddModal()"></div>
 
+    <div class="relative w-[600px] max-h-[90vh] flex flex-col bg-[#050508] rounded-xl overflow-hidden shadow-[0_0_50px_rgba(0,209,160,0.15)] border border-[#00d1a0]/30 animate-slide-up">
+        <div class="relative h-16 shrink-0 flex items-center justify-between px-6 border-b border-white/5 bg-[#0a0a0f] z-10">
+            <h3 class="text-xl font-black italic tracking-widest text-white uppercase">
+                <span class="text-[#00d1a0]">ADD / EDIT</span> 角色数据录入
+            </h3>
+            <button onclick="closeAddModal()" class="w-8 h-8 flex items-center justify-center rounded bg-white/5 hover:bg-red-500 hover:text-white text-gray-400 transition-all">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-5 custom-scroll bg-[#08080a]">
+            <input type="hidden" id="form-id" value="0">
+
+            <div>
+                <label class="block text-xs font-black text-[#00d1a0]/70 mb-2 tracking-widest uppercase">Project / 所属分类</label>
+                <select id="form-project" class="w-full bg-[#15151a] text-white font-bold text-sm px-4 py-3 rounded border border-white/10 focus:border-[#00d1a0] focus:outline-none appearance-none">
+                    <option value="ancient">古风角色 (Ancient)</option>
+                    <option value="urban">都市角色 (Urban)</option>
+                    <option value="wasteland">末日角色 (Wasteland)</option>
+                    <option value="cultivation">修仙角色 (Cultivation)</option>
+                    <option value="cyberpunk">灵异角色 (Cyberpunk)</option>
+                    <option value="default">其他角色 (Default)</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-black text-[#00d1a0]/70 mb-2 tracking-widest uppercase">Name / 角色代号</label>
+                    <input type="text" id="form-name" placeholder="例如：李逍遥"
+                           class="w-full bg-[#15151a] text-white font-bold text-sm px-4 py-3 rounded border border-white/10 focus:border-[#00d1a0] focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-black text-[#00d1a0]/70 mb-2 tracking-widest uppercase">Label / 标签</label>
+                    <input type="text" id="form-label" placeholder="例如：SSR / 剑客"
+                           class="w-full bg-[#15151a] text-white font-bold text-sm px-4 py-3 rounded border border-white/10 focus:border-[#00d1a0] focus:outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-black text-[#00d1a0]/70 mb-2 tracking-widest uppercase">Description / 角色描述</label>
+                <textarea id="form-desc" rows="3" placeholder="输入角色背景故事或详细设定..."
+                          class="w-full bg-[#15151a] text-gray-300 font-bold text-sm px-4 py-3 rounded border border-white/10 focus:border-[#00d1a0] focus:outline-none resize-none"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-black text-[#00d1a0]/70 mb-2 tracking-widest uppercase">Image / 封面图片 (Max 2MB)</label>
+                <div class="relative group">
+                    <input type="file" id="form-image-file" accept="image/*" class="hidden" onchange="previewFile('image')">
+                    <div onclick="document.getElementById('form-image-file').click()"
+                         class="w-full h-32 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#00d1a0] hover:bg-[#00d1a0]/5 transition-all overflow-hidden relative">
+                        <img id="preview-image-img" class="absolute inset-0 w-full h-full object-cover hidden">
+                        <div class="flex flex-col items-center z-10 text-gray-500 group-hover:text-[#00d1a0]">
+                            <i data-lucide="image-plus" class="w-8 h-8 mb-2"></i>
+                            <span class="text-xs font-bold tracking-widest">点击上传图片</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-black text-[#00d1a0]/70 mb-2 tracking-widest uppercase">Video / 演示视频 (Max 10MB)</label>
+                <div class="relative group">
+                    <input type="file" id="form-video-file" accept="video/*" class="hidden" onchange="previewFile('video')">
+                    <div onclick="document.getElementById('form-video-file').click()"
+                         class="w-full h-32 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#00d1a0] hover:bg-[#00d1a0]/5 transition-all overflow-hidden relative">
+                        <video id="preview-video-vid" class="absolute inset-0 w-full h-full object-cover hidden" muted></video>
+                        <div class="flex flex-col items-center z-10 text-gray-500 group-hover:text-[#00d1a0]">
+                            <i data-lucide="video" class="w-8 h-8 mb-2"></i>
+                            <span class="text-xs font-bold tracking-widest">点击上传视频</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 bg-[#08080a] border-t border-white/5 flex gap-4">
+            <button onclick="closeAddModal()" class="flex-1 h-12 rounded border border-white/10 text-gray-400 font-bold hover:bg-white/5 transition-all">取消</button>
+            <button onclick="submitCharacter()" id="submit-btn" class="flex-1 h-12 rounded bg-[#00d1a0] text-black font-black tracking-widest hover:bg-[#00ffc3] transition-all flex items-center justify-center gap-2">
+                <i data-lucide="save" class="w-4 h-4"></i> 提交数据
+            </button>
+        </div>
+    </div>
+</div>
 <div id="preview-overlay"
      class="fixed inset-0 z-[300] bg-black/95 backdrop-blur-xl flex items-center justify-center animate-fade-in hidden"
      onclick="closePreview()">
@@ -251,6 +343,8 @@
     <div id="preview-content" class="relative max-w-[90vw] max-h-[90vh]" onclick="event.stopPropagation()">
     </div>
 </div>
+
+
 
 <script>
     // 使用相对路径，自动适配当前域名和端口 (5000)
@@ -491,6 +585,122 @@
             alert("网络错误");
         }
     }
+    // === 🟢 新增逻辑开始 ===
+
+    // 打开新增窗口
+    function openAddModal() {
+        document.getElementById('add-modal').classList.remove('hidden');
+        // 重置表单
+        document.getElementById('form-id').value = '0'; // 0 代表新增
+        document.getElementById('form-name').value = '';
+        document.getElementById('form-label').value = '';
+        document.getElementById('form-desc').value = '';
+        document.getElementById('form-project').value = currentCategory === 'all' ? 'ancient' : currentCategory;
+
+        // 重置预览
+        document.getElementById('form-image-file').value = '';
+        document.getElementById('form-video-file').value = '';
+        document.getElementById('preview-image-img').classList.add('hidden');
+        document.getElementById('preview-video-vid').classList.add('hidden');
+        document.getElementById('preview-image-img').src = '';
+        document.getElementById('preview-video-vid').src = '';
+    }
+
+    // 关闭窗口
+    function closeAddModal() {
+        document.getElementById('add-modal').classList.add('hidden');
+    }
+
+    // 文件预览处理
+    function previewFile(type) {
+        const fileInput = document.getElementById(`form-${type}-file`);
+        const previewEl = document.getElementById(type === 'image' ? 'preview-image-img' : 'preview-video-vid');
+
+        if (fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+
+            // 简单的大小检查 (2MB 图片, 10MB 视频)
+            const limit = type === 'image' ? 2 * 1024 * 1024 : 10 * 1024 * 1024;
+            if (file.size > limit) {
+                alert(`文件太大！${type} 不能超过 ${type === 'image' ? '2MB' : '10MB'}`);
+                fileInput.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewEl.src = e.target.result;
+                previewEl.classList.remove('hidden');
+            }
+            reader.readAsDataURL(file);
+        }
+    }
+
+    // 🔴 核心提交函数：上传到 CDN 并保存
+    async function submitCharacter() {
+        const btn = document.getElementById('submit-btn');
+        const originalText = btn.innerHTML;
+
+        try {
+            // 1. 获取表单数据
+            const id = document.getElementById('form-id').value;
+            const name = document.getElementById('form-name').value;
+            const label = document.getElementById('form-label').value;
+            const desc = document.getElementById('form-desc').value;
+            const project = document.getElementById('form-project').value;
+
+            // 2. 获取文件 Base64 数据
+            const imgEl = document.getElementById('preview-image-img');
+            const vidEl = document.getElementById('preview-video-vid');
+
+            // 必须要有图片和视频（如果是新增）
+            if (!name || !imgEl.src || !vidEl.src) {
+                alert("请填写完整信息，并上传图片和视频！");
+                return;
+            }
+
+            // 3. 按钮变 loading
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 上传中...`;
+            btn.disabled = true;
+
+            // 4. 组装数据
+            const payload = {
+                id: id,
+                name: name,
+                label: label,
+                desc: desc,
+                project_name: project,
+                image: imgEl.src, // 这里已经是 base64 格式了
+                video: vidEl.src  // 这里已经是 base64 格式了
+            };
+
+            // 5. 发送到后端 (后端会自动上传到 COS/CDN)
+            const res = await fetch(`${API_BASE}/character/save`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const json = await res.json();
+
+            if (json.success) {
+                alert("✅ 上传成功！CDN 已加速。");
+                closeAddModal();
+                loadData(); // 刷新列表
+            } else {
+                alert("❌ 保存失败: " + json.msg);
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert("❌ 网络错误或文件太大");
+        } finally {
+            // 恢复按钮
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+    // === 🟢 新增逻辑结束 ===
 </script>
 </body>
 </html>
