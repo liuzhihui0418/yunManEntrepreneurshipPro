@@ -32,9 +32,11 @@ from qcloud_cos import CosS3Client
 load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-
+# 🟢 新增：设置 Flask 允许的最大请求大小为 50MB
+app.config['MAX_CONTENT_LENGTH'] = 15 * 1024 * 1024
 # 假设你的前端域名是 ai.yunmanybcz.chat
-CORS(app, supports_credentials=True, resources={r"/*": {"origins": ["https://ai.yunmanybcz.chat", "http://localhost:5000"]}})
+# 🔥 修改这里：origins 改为 "*" (代表允许任何项目、任何IP连接)
+CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
 # ==========================================
 # 1. 全局配置与密钥 (已改为从环境变量读取)
