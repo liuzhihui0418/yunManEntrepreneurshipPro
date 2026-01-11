@@ -326,7 +326,13 @@
                 </div>
             </div>
         </div>
-
+<div class="px-6 pb-2">
+                <label class="block text-xs font-black text-red-500 mb-2 tracking-widest uppercase">
+                    <i data-lucide="lock" class="inline w-3 h-3 mb-0.5"></i> Admin Password / 管理员口令 (必填)
+                </label>
+                <input type="password" id="form-admin-pwd" placeholder="请输入服务器设置的 ADMIN_PASSWORD"
+                       class="w-full bg-[#15151a] text-white font-bold text-sm px-4 py-3 rounded border border-red-500/30 focus:border-red-500 focus:outline-none focus:shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+            </div>
         <div class="p-6 bg-[#08080a] border-t border-white/5 flex gap-4">
             <button onclick="closeAddModal()" class="flex-1 h-12 rounded border border-white/10 text-gray-400 font-bold hover:bg-white/5 transition-all">取消</button>
             <button onclick="submitCharacter()" id="submit-btn" class="flex-1 h-12 rounded bg-[#00d1a0] text-black font-black tracking-widest hover:bg-[#00ffc3] transition-all flex items-center justify-center gap-2">
@@ -604,6 +610,9 @@
         document.getElementById('preview-video-vid').classList.add('hidden');
         document.getElementById('preview-image-img').src = '';
         document.getElementById('preview-video-vid').src = '';
+        // 👇👇👇 新增：清空密码框 👇👇👇
+        document.getElementById('form-admin-pwd').value = '';
+        // 👆👆👆
     }
 
     // 关闭窗口
@@ -638,82 +647,96 @@
 
     // 🔴 核心提交函数：上传到 CDN 并保存
     async function submitCharacter() {
-    const btn = document.getElementById('submit-btn');
-    const originalText = btn.innerHTML;
+        const btn = document.getElementById('submit-btn');
+        const originalText = btn.innerHTML;
 
-    try {
-        // 1. 获取 DOM 元素
-        const id = document.getElementById('form-id').value;
-        const name = document.getElementById('form-name').value;
-        const label = document.getElementById('form-label').value;
-        const desc = document.getElementById('form-desc').value;
-        const project = document.getElementById('form-project').value;
+        try {
+            // 1. 获取 DOM 元素
+            const id = document.getElementById('form-id').value;
+            const name = document.getElementById('form-name').value;
+            const label = document.getElementById('form-label').value;
+            const desc = document.getElementById('form-desc').value;
+            const project = document.getElementById('form-project').value;
 
-        // 获取文件 Input 元素
-        const imgInput = document.getElementById('form-image-file');
-        const vidInput = document.getElementById('form-video-file');
+            // 👇👇👇 新增：获取输入的密码 👇👇👇
+            const adminPwd = document.getElementById('form-admin-pwd').value.trim();
+            if (!adminPwd) {
+                alert("🔒 安全拦截：请输入管理员密码才能上传！");
+                document.getElementById('form-admin-pwd').focus();
+                return;
+            }
+            // 👆👆👆 新增结束 👆👆👆
 
-        // 获取预览图的 src (用于编辑模式下判断是否需要保留旧图)
-        const currentImgSrc = document.getElementById('preview-image-img').src;
-        const currentVidSrc = document.getElementById('preview-video-vid').src;
+            // 获取文件 Input 元素
+            const imgInput = document.getElementById('form-image-file');
+            const vidInput = document.getElementById('form-video-file');
 
-        // 简单校验
-        if (!name) { alert("请填写名称"); return; }
-        // 如果是新增(id=0)，必须有文件
-        if (id == '0' && (imgInput.files.length === 0 || vidInput.files.length === 0)) {
-            alert("新增角色必须上传图片和视频！");
-            return;
+            // 获取预览图的 src
+            const currentImgSrc = document.getElementById('preview-image-img').src;
+            const currentVidSrc = document.getElementById('preview-video-vid').src;
+
+            // 简单校验
+            if (!name) { alert("请填写名称"); return; }
+            if (id == '0' && (imgInput.files.length === 0 || vidInput.files.length === 0)) {
+                alert("新增角色必须上传图片和视频！");
+                return;
+            }
+
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 验证并上传...`;
+            btn.disabled = true;
+
+            // 2. 组装 FormData
+            const formData = new FormData();
+            formData.append('id', id);
+            formData.append('name', name);
+            formData.append('label', label);
+            formData.append('desc', desc);
+            formData.append('project_name', project);
+
+            if (imgInput.files[0]) {
+                formData.append('image_file', imgInput.files[0]);
+            } else {
+                formData.append('image_url_old', currentImgSrc);
+            }
+
+            if (vidInput.files[0]) {
+                formData.append('video_file', vidInput.files[0]);
+            } else {
+                formData.append('video_url_old', currentVidSrc);
+            }
+
+            // 3. 发送请求 (带上 Header 口令)
+            const res = await fetch(`${API_BASE}/character/save`, {
+                method: 'POST',
+                // 👇👇👇 关键修改：添加 Header 带上密码 👇👇👇
+                headers: {
+                    'X-Admin-Token': adminPwd
+                },
+                // 👆👆👆 修改结束 👆👆👆
+                body: formData
+            });
+
+            const json = await res.json();
+
+            if (json.success) {
+                alert("✅ 上传成功！");
+                closeAddModal();
+                // 可以在这里把密码存一下 localStorage，方便下次不用输，看你需要
+                // localStorage.setItem('admin_pwd_cache', adminPwd);
+                loadData();
+            } else {
+                alert("❌ 保存失败: " + json.msg);
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert("❌ 网络错误或文件太大");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
-
-        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 上传中...`;
-        btn.disabled = true;
-
-        // 2. 🚀 关键修改：使用 FormData
-        const formData = new FormData();
-        formData.append('id', id);
-        formData.append('name', name);
-        formData.append('label', label);
-        formData.append('desc', desc);
-        formData.append('project_name', project);
-
-        // 如果用户选了新文件，追加文件对象
-        if (imgInput.files[0]) {
-            formData.append('image_file', imgInput.files[0]);
-        } else {
-            // 没选新文件，传旧 URL
-            formData.append('image_url_old', currentImgSrc);
-        }
-
-        if (vidInput.files[0]) {
-            formData.append('video_file', vidInput.files[0]);
-        } else {
-            formData.append('video_url_old', currentVidSrc);
-        }
-
-        // 3. 发送请求 (注意：不要设置 Content-Type，浏览器会自动识别为 multipart/form-data)
-        const res = await fetch(`${API_BASE}/character/save`, {
-            method: 'POST',
-            body: formData  // 直接传 formData
-        });
-
-        const json = await res.json();
-
-        if (json.success) {
-            alert("✅ 上传成功！");
-            closeAddModal();
-            loadData();
-        } else {
-            alert("❌ 保存失败: " + json.msg);
-        }
-
-    } catch (e) {
-        console.error(e);
-        alert("❌ 网络错误或文件太大");
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
     }
-}
+
     // === 🟢 新增逻辑结束 ===
 </script>
 </body>
