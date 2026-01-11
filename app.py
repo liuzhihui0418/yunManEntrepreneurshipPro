@@ -128,43 +128,29 @@ def get_alipay_client():
 
 # ================= 工具函数 =================
 
-# 辅助函数：上传 Base64 到腾讯云 COS
-def ensure_url_logic(data_str: str, max_size_mb: float, sub_folder: str = "library"):
-    if not data_str:
-        return None
-
-    # 如果已经是 http 开头，说明没修改图片，直接返回
-    if data_str.startswith("http"):
-        return data_str
-
-    # 解析 Base64
-    if "base64," in data_str:
+# 修改后的上传逻辑：同时支持 纯URL、文件对象(FileStorage)
+def ensure_upload(file_obj, url_str, sub_folder="library"):
+    # 1. 如果有新文件上传 (FileStorage 对象)
+    if file_obj:
         try:
             if not cos_client:
-                raise Exception("COS 客户端未初始化，请检查密钥")
+                raise Exception("COS 客户端未初始化")
 
-            header, encoded = data_str.split("base64,", 1)
-            # 简单的扩展名提取
-            ext = "png"
-            if "jpeg" in header: ext = "jpg"
-            if "video" in header: ext = "mp4"
-
-            file_content = base64.b64decode(encoded)
-
-            # 大小检查
-            size_mb = len(file_content) / (1024 * 1024)
-            if size_mb > max_size_mb:
-                raise ValueError(f"文件过大({size_mb:.1f}MB)，限制{max_size_mb}MB")
-
-            # 生成文件名并上传
+            # 获取后缀名
+            ext = file_obj.filename.split('.')[-1] if '.' in file_obj.filename else "png"
             filename = f"{sub_folder}/{uuid.uuid4().hex}.{ext}"
-            cos_client.put_object(Bucket=TENCENT_BUCKET, Body=file_content, Key=filename)
 
-            # 返回 CDN 链接
+            # 直接读取文件流上传，不用转 base64
+            cos_client.put_object(Bucket=TENCENT_BUCKET, Body=file_obj.read(), Key=filename)
             return f"{CDN_DOMAIN}/{filename}"
         except Exception as e:
             print(f"COS 上传异常: {e}")
             raise e
+
+    # 2. 如果没有新文件，检查是不是原本的 URL (用于编辑模式)
+    if url_str and url_str.startswith("http"):
+        return url_str
+
     return None
 
 
@@ -716,52 +702,49 @@ def style_library_page():
 
 # 1. 保存/更新角色
 @app.route("/api/cloud/character/save", methods=['POST'])
-@login_required  # <--- 🔥🔥 必须加上这一行！
+@login_required
 def save_character_db():
     try:
-        data = request.get_json()
+        # 注意：使用 FormData 后，普通字段在 request.form，文件在 request.files
+        label = request.form.get('label', '').strip()
+        name = request.form.get('name', '').strip()
+        desc = request.form.get('desc', '').strip()
+        p_name = request.form.get('project_name', '').strip()
+        char_id = request.form.get('id')
 
-        label = data.get('label', '').strip()
-        name = data.get('name', '').strip()
-        desc = data.get('desc', '').strip()
-        p_name = data.get('project_name', '').strip()
-        image_raw = data.get('image')
-        video_raw = data.get('video')
+        # 获取文件对象 (如果没有上传新文件，这里是 None)
+        image_file = request.files.get('image_file')
+        video_file = request.files.get('video_file')
 
-        if not all([label, name, desc, p_name, image_raw, video_raw]):
-            return jsonify({"success": False, "msg": "所有字段（标签、名称、描述、图片、视频）都必须填写！"})
+        # 获取旧 URL (用于编辑时未修改图片的情况)
+        image_url_old = request.form.get('image_url_old')
+        video_url_old = request.form.get('video_url_old')
 
-        if name in ["@new.character", "New Role"]:
-            return jsonify({"success": False, "msg": "请修改默认代号"})
+        if not all([label, name, desc, p_name]):
+            return jsonify({"success": False, "msg": "基础信息（标签、名称、描述）必须填写！"})
 
         # 上传处理
         try:
-            img_val = ensure_url_logic(image_raw, max_size_mb=2.0)
-            vid_val = ensure_url_logic(video_raw, max_size_mb=10.0)
-        except ValueError as ve:
-            return jsonify({"success": False, "msg": str(ve)})
+            # 传入 文件对象 和 旧URL，函数内部自动判断用哪个
+            final_img_url = ensure_upload(image_file, image_url_old, "library")
+            final_vid_url = ensure_upload(video_file, video_url_old, "library")
+
+            if not final_img_url or not final_vid_url:
+                return jsonify({"success": False, "msg": "请上传图片和视频"})
+
         except Exception as e:
             return jsonify({"success": False, "msg": f"文件上传失败: {str(e)}"})
 
         conn = pymysql.connect(**MYSQL_CONF)
         try:
             with conn.cursor() as cursor:
-                char_id = data.get('id')
-                # 判断新增逻辑
-                if not char_id or str(char_id) == '0' or str(char_id) == 'NEW' or (
-                        str(char_id).isdigit() and int(char_id) > 10000000):
-                    sql = """
-                    INSERT INTO character_library (project_name, label, name, `desc`, image_url, video_url) 
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """
-                    cursor.execute(sql, (p_name, label, name, desc, img_val, vid_val))
+                # ...SQL 插入/更新逻辑保持不变，只需把 img_val 换成 final_img_url...
+                if not char_id or str(char_id) == '0' or str(char_id) == 'NEW':
+                    sql = """INSERT INTO character_library (project_name, label, name, `desc`, image_url, video_url) VALUES (%s, %s, %s, %s, %s, %s)"""
+                    cursor.execute(sql, (p_name, label, name, desc, final_img_url, final_vid_url))
                 else:
-                    sql = """
-                    UPDATE character_library 
-                    SET project_name=%s, label=%s, name=%s, `desc`=%s, image_url=%s, video_url=%s 
-                    WHERE id=%s
-                    """
-                    cursor.execute(sql, (p_name, label, name, desc, img_val, vid_val, char_id))
+                    sql = """UPDATE character_library SET project_name=%s, label=%s, name=%s, `desc`=%s, image_url=%s, video_url=%s WHERE id=%s"""
+                    cursor.execute(sql, (p_name, label, name, desc, final_img_url, final_vid_url, char_id))
             conn.commit()
         finally:
             conn.close()
@@ -770,7 +753,6 @@ def save_character_db():
     except Exception as e:
         print(f"Save Error: {e}")
         return jsonify({"success": False, "msg": str(e)})
-
 
 # 2. 获取角色列表
 # 修改后：加上装饰器

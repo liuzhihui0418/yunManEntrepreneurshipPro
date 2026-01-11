@@ -638,68 +638,82 @@
 
     // 🔴 核心提交函数：上传到 CDN 并保存
     async function submitCharacter() {
-        const btn = document.getElementById('submit-btn');
-        const originalText = btn.innerHTML;
+    const btn = document.getElementById('submit-btn');
+    const originalText = btn.innerHTML;
 
-        try {
-            // 1. 获取表单数据
-            const id = document.getElementById('form-id').value;
-            const name = document.getElementById('form-name').value;
-            const label = document.getElementById('form-label').value;
-            const desc = document.getElementById('form-desc').value;
-            const project = document.getElementById('form-project').value;
+    try {
+        // 1. 获取 DOM 元素
+        const id = document.getElementById('form-id').value;
+        const name = document.getElementById('form-name').value;
+        const label = document.getElementById('form-label').value;
+        const desc = document.getElementById('form-desc').value;
+        const project = document.getElementById('form-project').value;
 
-            // 2. 获取文件 Base64 数据
-            const imgEl = document.getElementById('preview-image-img');
-            const vidEl = document.getElementById('preview-video-vid');
+        // 获取文件 Input 元素
+        const imgInput = document.getElementById('form-image-file');
+        const vidInput = document.getElementById('form-video-file');
 
-            // 必须要有图片和视频（如果是新增）
-            if (!name || !imgEl.src || !vidEl.src) {
-                alert("请填写完整信息，并上传图片和视频！");
-                return;
-            }
+        // 获取预览图的 src (用于编辑模式下判断是否需要保留旧图)
+        const currentImgSrc = document.getElementById('preview-image-img').src;
+        const currentVidSrc = document.getElementById('preview-video-vid').src;
 
-            // 3. 按钮变 loading
-            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 上传中...`;
-            btn.disabled = true;
-
-            // 4. 组装数据
-            const payload = {
-                id: id,
-                name: name,
-                label: label,
-                desc: desc,
-                project_name: project,
-                image: imgEl.src, // 这里已经是 base64 格式了
-                video: vidEl.src  // 这里已经是 base64 格式了
-            };
-
-            // 5. 发送到后端 (后端会自动上传到 COS/CDN)
-            const res = await fetch(`${API_BASE}/character/save`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            const json = await res.json();
-
-            if (json.success) {
-                alert("✅ 上传成功！CDN 已加速。");
-                closeAddModal();
-                loadData(); // 刷新列表
-            } else {
-                alert("❌ 保存失败: " + json.msg);
-            }
-
-        } catch (e) {
-            console.error(e);
-            alert("❌ 网络错误或文件太大");
-        } finally {
-            // 恢复按钮
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+        // 简单校验
+        if (!name) { alert("请填写名称"); return; }
+        // 如果是新增(id=0)，必须有文件
+        if (id == '0' && (imgInput.files.length === 0 || vidInput.files.length === 0)) {
+            alert("新增角色必须上传图片和视频！");
+            return;
         }
+
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 上传中...`;
+        btn.disabled = true;
+
+        // 2. 🚀 关键修改：使用 FormData
+        const formData = new FormData();
+        formData.append('id', id);
+        formData.append('name', name);
+        formData.append('label', label);
+        formData.append('desc', desc);
+        formData.append('project_name', project);
+
+        // 如果用户选了新文件，追加文件对象
+        if (imgInput.files[0]) {
+            formData.append('image_file', imgInput.files[0]);
+        } else {
+            // 没选新文件，传旧 URL
+            formData.append('image_url_old', currentImgSrc);
+        }
+
+        if (vidInput.files[0]) {
+            formData.append('video_file', vidInput.files[0]);
+        } else {
+            formData.append('video_url_old', currentVidSrc);
+        }
+
+        // 3. 发送请求 (注意：不要设置 Content-Type，浏览器会自动识别为 multipart/form-data)
+        const res = await fetch(`${API_BASE}/character/save`, {
+            method: 'POST',
+            body: formData  // 直接传 formData
+        });
+
+        const json = await res.json();
+
+        if (json.success) {
+            alert("✅ 上传成功！");
+            closeAddModal();
+            loadData();
+        } else {
+            alert("❌ 保存失败: " + json.msg);
+        }
+
+    } catch (e) {
+        console.error(e);
+        alert("❌ 网络错误或文件太大");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
     }
+}
     // === 🟢 新增逻辑结束 ===
 </script>
 </body>
