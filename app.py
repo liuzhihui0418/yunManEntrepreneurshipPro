@@ -165,26 +165,30 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # =================================================
-        # 🟢 新增逻辑：API Key 绿色通道
+        # 🟢 新增逻辑：API Key 绿色通道 (带调试功能)
         # =================================================
-        # 获取请求头中的 X-API-Key
         request_key = request.headers.get('X-API-Key')
 
-        # 如果 Key 存在且正确，直接放行，跳过后续所有 Session 检查
-        if request_key and request_key == INTERNAL_API_KEY:
+        # 重新获取一次环境变量，防止全局变量没加载到
+        # .strip() 去除可能存在的首尾空格，防止 .env 写错
+        env_key = os.getenv("INTERNAL_API_KEY")
+
+        # 🔍 调试打印：请在 Pycharm/终端 控制台看这行输出！
+        if request_key:
+            print(f"🔍 [调试] 客户端发来的Key: [{request_key}] | 服务器配置的Key: [{env_key}]")
+
+        # 核心判断：只有两者都不为空，且相等时才放行
+        if env_key and request_key and str(request_key).strip() == str(env_key).strip():
             return f(*args, **kwargs)
         # =================================================
 
-        # 👇👇👇 下面是您原本的逻辑 (保持不变) 👇👇👇
+        # 👇👇👇 下面是 Session 校验逻辑 (保持不变) 👇👇👇
 
-        # 1. 获取 Session ID
         session_id = request.cookies.get('session_id')
 
-        # 2. 基础 Redis 校验
         if not session_id or not redis_manager.validate_session(session_id):
             return jsonify({"status": "error", "msg": "未登录或会话已过期"}), 401
 
-        # 3. 获取用户信息
         user_info = redis_manager.get_session_info(session_id)
         if not user_info:
             return jsonify({"status": "error", "msg": "用户信息获取失败"}), 401
@@ -192,7 +196,6 @@ def login_required(f):
         code = user_info.get('code')
         device_id = user_info.get('device_id')
 
-        # 4. 严格校验 (数据库 + 设备绑定)
         if not db_manager.check_code_is_valid_strict(code) or \
                 not db_manager.check_device_consistency(code, device_id):
             redis_manager.destroy_session(session_id)
