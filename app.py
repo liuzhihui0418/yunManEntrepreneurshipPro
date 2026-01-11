@@ -171,10 +171,8 @@ def ensure_url_logic(data_str: str, max_size_mb: float, sub_folder: str = "libra
 from functools import wraps
 
 
-# 定义登录校验装饰器
-# 定义内部 API 调用密钥 (建议去 .env 文件里配置这个变量，这里是默认值)
-# ⚠️ 注意：请把 "yunman_2026_super_key" 改成只有您自己知道的复杂密码
-INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "yunman_2026_super_key")
+# 删掉默认值，强制从环境变量读取。读取不到就为空，这样更安全。
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
 
 
 def login_required(f):
