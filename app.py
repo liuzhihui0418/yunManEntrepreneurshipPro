@@ -24,7 +24,7 @@ from db.database import db_manager
 # 腾讯云 COS 引用
 from qcloud_cos import CosConfig
 from qcloud_cos import CosS3Client
-
+from weichat.bot import bot_bp
 # ==========================================
 # 0. 加载 .env 环境变量 (最先执行)
 # ==========================================
@@ -38,6 +38,8 @@ app.config['MAX_CONTENT_LENGTH'] = 15 * 1024 * 1024
 # 🔥 修改这里：origins 改为 "*" (代表允许任何项目、任何IP连接)
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
 
+# 这一行就把 bot.py 里的 '/wechat' 路由接管过来了
+app.register_blueprint(bot_bp)
 # ==========================================
 # 1. 全局配置与密钥 (已改为从环境变量读取)
 # ==========================================
