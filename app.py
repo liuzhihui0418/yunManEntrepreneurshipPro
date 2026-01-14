@@ -28,6 +28,14 @@ from weichat.bot import bot_bp
 # ==========================================
 # 0. 加载 .env 环境变量 (最先执行)
 # ==========================================
+# 🟢 修改点：强制使用绝对路径加载 .env，防止找不到文件
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path, override=True)  # override=True 确保覆盖系统变量
+    print(f"✅ 已加载配置文件: {dotenv_path}")
+else:
+    print("❌ 严重警告：找不到 .env 文件，程序将无法正常运行！")
+# ==========================================
 # 这行代码会自动读取同目录下的 .env 文件
 load_dotenv()
 
@@ -89,32 +97,69 @@ except Exception as e:
 
 
 # 密钥清洗函数 (逻辑保持不变，依然兼容 .env 中的单行格式)
+# 🟢 修改点：增强的密钥清洗函数 (完全复制 pay.py 的成功逻辑)
 def fix_key_format(key_content, is_private=True):
     if not key_content:
+        print(f"❌ 警告：{'私钥' if is_private else '公钥'} 内容为空！请检查 .env 文件。")
         return ""
-    # 清洗掉可能存在的头尾和空格
-    key_content = key_content.replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----",
-                                                                                     "")
-    key_content = key_content.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-    key_content = key_content.replace("-----BEGIN PUBLIC KEY-----", "").replace("-----END PUBLIC KEY-----", "")
+
+    # 1. 清洗 (去掉可能存在的旧头尾、空格、换行)
+    key_content = key_content.replace("-----BEGIN RSA PRIVATE KEY-----", "")
+    key_content = key_content.replace("-----END RSA PRIVATE KEY-----", "")
+    key_content = key_content.replace("-----BEGIN PRIVATE KEY-----", "")
+    key_content = key_content.replace("-----END PRIVATE KEY-----", "")
+    key_content = key_content.replace("-----BEGIN PUBLIC KEY-----", "")
+    key_content = key_content.replace("-----END PUBLIC KEY-----", "")
     key_content = key_content.replace("\n", "").replace(" ", "").strip()
 
-    # 补全 padding
+    # 2. 补全 Base64 Padding (防止因复制丢失等于号报错)
     missing_padding = len(key_content) % 4
-    if missing_padding: key_content += '=' * (4 - missing_padding)
+    if missing_padding:
+        key_content += '=' * (4 - missing_padding)
 
-    # 重新切分，每64字符一行
+    # 3. 64字符换行
     split_key = '\n'.join([key_content[i:i + 64] for i in range(0, len(key_content), 64)])
 
+    # 4. 加头
     if is_private:
         return f"-----BEGIN PRIVATE KEY-----\n{split_key}\n-----END PRIVATE KEY-----"
     else:
+        # 注意：支付宝公钥通常是 Standard Public Key 格式
         return f"-----BEGIN PUBLIC KEY-----\n{split_key}\n-----END PUBLIC KEY-----"
 
 
 # 格式化密钥
 FINAL_PRIVATE_KEY = fix_key_format(PRIVATE_KEY_CONTENT, True)
 FINAL_PUBLIC_KEY = fix_key_format(ALIPAY_PUBLIC_KEY_CONTENT, False)
+
+# ==========================================
+# 🟢 新增：启动时自检密钥 (防止网页报错 "RSA key format not supported")
+# ==========================================
+try:
+    print("-" * 30)
+    print("正在进行密钥自检...")
+
+    if not FINAL_PRIVATE_KEY or len(FINAL_PRIVATE_KEY) < 100:
+        raise ValueError("私钥内容过短或为空，.env读取失败")
+
+    if not FINAL_PUBLIC_KEY or len(FINAL_PUBLIC_KEY) < 50:
+        raise ValueError("公钥内容过短或为空，.env读取失败")
+
+    # 尝试模拟加载
+    from Cryptodome.PublicKey import RSA
+
+    RSA.importKey(FINAL_PRIVATE_KEY)
+    print("✅ 私钥格式检查通过 (Cryptodome load success)")
+
+    RSA.importKey(FINAL_PUBLIC_KEY)
+    print("✅ 支付宝公钥格式检查通过 (Cryptodome load success)")
+    print("-" * 30)
+
+except Exception as e:
+    print("\n" + "!" * 50)
+    print(f"❌ 严重错误：密钥格式校验失败！\n错误详情: {e}")
+    print("请检查 .env 文件中 PRIVATE_KEY_CONTENT 和 ALIPAY_PUBLIC_KEY_CONTENT 是否完整粘贴。")
+    print("!" * 50 + "\n")
 
 
 # 初始化支付宝客户端
