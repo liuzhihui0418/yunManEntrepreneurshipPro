@@ -563,7 +563,7 @@
         .feature-desc {
             color: rgba(255, 255, 255, 0.7);
             line-height: 1.8; /* 行高增加，阅读更舒适 */
-            font-size: 16px;
+            font-size: 20px;
             margin-bottom: 30px;
             flex-grow: 1; /* 让描述部分占据剩余空间 */
         }
@@ -640,10 +640,11 @@
             justify-content: center;
             gap: 10px;
             margin-bottom: 20px;
+            font-size: 20px;
         }
 
         .footer-logo i {
-            font-size: 24px;
+            font-size: 30px;
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -655,10 +656,12 @@
         }
 
         .footer-text {
-            color: rgba(255, 255, 255, 0.4);
+            color: white;
             max-width: 600px;
             margin: 0 auto 30px;
             line-height: 1.6;
+            font-size: 20px;
+
         }
 
         .footer-links {
@@ -679,8 +682,9 @@
         }
 
         .footer-copyright {
-            color: rgba(255, 255, 255, 0.3);
-            font-size: 14px;
+            color: white;
+            font-size: 25px;
+            font-weight: bold;
         }
 
         /* 响应式设计 */
@@ -887,6 +891,120 @@
             font-size: 18px;
             font-weight: 500;
         }
+
+        /* ================= 联系我们弹窗 (完美复刻登录页特效) ================= */
+.contact-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10005; /* 确保在最顶层 */
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.contact-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 弹窗外壳：负责裁剪旋转背景 */
+.contact-box-wrapper {
+    position: relative;
+    width: 400px;
+    padding: 3px; /* 这里是流光边框的宽度 */
+    border-radius: 24px;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 50px rgba(249, 115, 22, 0.3); /* 橙色光晕 */
+}
+
+.contact-modal.active .contact-box-wrapper {
+    transform: scale(1);
+}
+
+/* 旋转的流光背景 */
+.contact-bg-rotate {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(from 0deg, #f97316, #fbbf24, #f97316); /* 橙色-黄色-橙色 */
+    animation: spin-slow 4s linear infinite;
+    z-index: 1;
+}
+
+/* 内部黑色内容区 */
+.contact-content {
+    position: relative;
+    background: #0F0F13; /* 深色背景 */
+    border-radius: 22px; /* 比外壳小一点 */
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+    z-index: 2;
+}
+
+.contact-close-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.3s;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.contact-close-btn:hover {
+    color: #fff;
+}
+
+.contact-title {
+    font-size: 30px;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: 4px;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.contact-qr-box {
+    width: 260px;
+    height: 260px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+}
+
+.contact-qr-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* 旋转动画定义 */
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
     </style>
 </head>
 <body>
@@ -1071,7 +1189,7 @@
                 <a href="#">帮助中心</a>
             </div>
             <div class="footer-copyright">
-                © 2026 YunManGongFangAI. 保留所有权利.
+                © 2026 YunManGongFangAI 皖ICP备2025105809号-1
             </div>
         </footer>
     </div>
@@ -1097,7 +1215,21 @@
         <div class="logout-loading-text">正在退出登录...</div>
     </div>
 
+<div class="contact-modal" id="contactModal">
+    <div class="contact-box-wrapper">
+        <div class="contact-bg-rotate"></div>
 
+        <div class="contact-content">
+            <div class="contact-close-btn" id="closeContact">&times;</div> <h3 class="contact-title">扫码联系官方</h3>
+
+            <div class="contact-qr-box">
+                <img src="https://yunman-1327419568.cos.ap-guangzhou.myqcloud.com/weixin.jpg"
+                     class="contact-qr-img"
+                     alt="官方客服二维码">
+            </div>
+        </div>
+    </div>
+</div>
 <div class="info-modal" id="cardInfoModal">
     <div class="info-modal-content">
         <div class="info-modal-header">
@@ -1520,6 +1652,53 @@ if (copyCardBtn) {
         }
     });
 }
+
+// ================= 联系我们弹窗逻辑 =================
+
+const contactModal = document.getElementById('contactModal');
+const closeContactBtn = document.getElementById('closeContact');
+
+// 1. 打开弹窗的函数
+function openContactModal(e) {
+    if(e) e.preventDefault(); // 阻止链接默认跳转
+
+    // 关闭其他可能打开的菜单
+    const userDropdown = document.getElementById('userDropdown');
+    if(userDropdown) userDropdown.classList.remove('active');
+
+    contactModal.classList.add('active');
+}
+
+// 2. 关闭弹窗的函数
+function closeContactModal() {
+    contactModal.classList.remove('active');
+}
+
+// 3. 自动绑定页面上所有的“联系我们”链接
+// 查找导航栏和底部所有的链接
+const allLinks = document.querySelectorAll('a');
+
+allLinks.forEach(link => {
+    // 只要链接文字包含“联系我们”，就绑定点击事件
+    if (link.textContent.trim().includes('联系我们')) {
+        link.addEventListener('click', openContactModal);
+    }
+});
+
+// 4. 绑定关闭按钮
+if(closeContactBtn) {
+    closeContactBtn.addEventListener('click', closeContactModal);
+}
+
+// 5. 点击遮罩层关闭
+if(contactModal) {
+    contactModal.addEventListener('click', (e) => {
+        if (e.target === contactModal) {
+            closeContactModal();
+        }
+    });
+}
+
     </script>
 
 </body>
