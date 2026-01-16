@@ -599,11 +599,33 @@ def get_realtime_stocks():
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
     data = request.get_json()
-    if redis_manager.validate_admin_login(data.get('username'), data.get('password')):
-        resp = jsonify({'success': True, 'redirect': '/admin/dashboard'})
-        resp.set_cookie('admin_token', str(uuid.uuid4()), max_age=86400)
-        return resp
-    return jsonify({'success': False, 'message': '账号密码错误'}), 401
+    username = data.get('username')
+    password = data.get('password')
+
+    conn = pymysql.connect(**MYSQL_CONF)
+    try:
+        with conn.cursor() as cursor:
+            # 1. 只查数据库，不看环境变量
+            sql = "SELECT * FROM admin_users WHERE username=%s AND password=%s"
+            cursor.execute(sql, (username, password))
+            user = cursor.fetchone()
+
+            if user:
+                # 2. 生成随机 Token
+                token = str(uuid.uuid4())
+
+                # 3. 🔥关键修改：把 Token 存入 Redis，有效期 24小时
+                # 键名：admin_session:token值
+                redis_manager.r.setex(f"admin_session:{token}", 86400, user['id'])
+
+                resp = jsonify({'success': True, 'redirect': '/admin/dashboard'})
+                # 4. 发送 Cookie 给浏览器
+                resp.set_cookie('admin_token', token, max_age=86400)
+                return resp
+            else:
+                return jsonify({'success': False, 'message': '账号密码错误'}), 401
+    finally:
+        conn.close()
 
 
 @app.route('/admin/codes', methods=['POST'])
