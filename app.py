@@ -528,7 +528,7 @@ def validate_invite_code():
             resp.set_cookie('session_id', session_id, max_age=86400, httponly=True, samesite='None', secure=True)
             return resp
         else:
-            return jsonify({'success': False, 'message': '邀请码不存在、已禁用或已过期'}), 401
+            return jsonify({'success': False, 'message': '邀请码不存在已禁用或已过期'}), 401
 
     except Exception as e:
         print(f"Login Error: {str(e)}")
