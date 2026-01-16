@@ -824,13 +824,17 @@ def delete_code_api():
     else:
         return jsonify({'success': False, 'message': '删除失败'})
 
-# # ==========================================
-# # 🚀 魔云工坊 - 配音神器页面
-# # ==========================================
-# @app.route('/magic_workshop')
-# @login_required  # 必须登录才能进入
-# def magic_workshop_page():
-#     return render_template('magic_workshop.html')
+@app.route('/yunmanapi')
+def yunman_api_page():
+    return render_template('yunmanapi.html')  # 假设你有这个HTML文件
+
+# ==========================================
+# 🚀 魔云工坊 - 配音神器页面
+# ==========================================
+@app.route('/magic_workshop')
+@login_required  # 必须登录才能进入
+def magic_workshop_page():
+    return render_template('magic_workshop.html')
 
 # ==========================================
 # 🚀 风格角色库 API (已完美移植合并)
