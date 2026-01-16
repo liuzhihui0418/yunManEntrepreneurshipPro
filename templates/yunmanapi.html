@@ -277,20 +277,43 @@
         </div>
     </section>
 
-    <section class="py-40 bg-slate-900 text-white relative overflow-hidden">
-        <div class="absolute top-0 left-0 w-full h-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
-        <div class="absolute top-[-50%] left-[-20%] w-[800px] h-[800px] bg-violet-600/30 rounded-full blur-[100px]"></div>
+    <section class="py-32 bg-white relative overflow-hidden">
+        <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-gradient-to-t from-slate-50 to-transparent z-0"></div>
+        <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[100px] bg-violet-100/50 blur-[100px] z-0"></div>
 
         <div class="max-w-4xl mx-auto px-6 text-center relative z-10">
-            <h2 class="text-6xl font-black mb-8 italic tracking-tighter">AI 创业的下半场，<br>是属于<span class="text-violet-400">懂成本创作的</span>你们。</h2>
-            <p class="text-xl font-bold mb-12 text-slate-300">现在加入云漫工坊API，创作属于您的精品作品。让你的效率和创意快人一步</p>
-            <div class="flex flex-col sm:flex-row justify-center gap-4">
-                <a href="https://ai.yunmanybcz.chat/" class="px-12 py-5 rounded-2xl bg-white text-slate-900 font-black text-xl hover:scale-105 transition-all shadow-2xl hover:shadow-white/20">
-                    进入云漫工坊 <i class="fa-solid fa-rocket ml-2"></i>
-                </a>
-                <button class="px-12 py-5 rounded-2xl bg-transparent text-white border-2 border-slate-700 font-black text-xl hover:bg-slate-800 transition-all">
-                    联系商务定制
-                </button>
+            <h2 class="text-5xl md:text-6xl font-black mb-12 tracking-tight text-slate-900 leading-[1.1] fade-in">
+                AI 创业的下半场，<br>
+                属于<span class="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-blue-600">懂成本创作</span>的你们。
+            </h2>
+
+            <div class="fade-in group relative inline-block w-full max-w-2xl" style="transition-delay: 100ms">
+                <div class="absolute -inset-0.5 bg-gradient-to-r from-violet-200 via-slate-200 to-violet-200 rounded-2xl opacity-70 blur-sm group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                <div class="relative bg-white rounded-xl p-8 md:p-10 border border-slate-100 shadow-xl flex flex-col items-center gap-6 overflow-hidden">
+                    <i class="fa-solid fa-user-shield absolute -right-6 -bottom-6 text-9xl text-slate-50 transform rotate-12 pointer-events-none"></i>
+
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                        <i class="fa-solid fa-lock text-violet-500"></i> Internal Only
+                    </div>
+
+                    <div class="text-center relative z-10">
+                        <p class="text-lg md:text-xl font-bold text-slate-800 leading-relaxed">
+                            云漫工坊 API 仅供
+                            <span class="relative inline-block px-1">
+                                <span class="absolute inset-0 bg-violet-100 skew-x-[-10deg] rounded-sm -z-10"></span>
+                                <span class="text-violet-700">云漫工坊内部学员</span>
+                            </span>
+                            和
+                            <span class="font-black text-slate-900">创作者</span>
+                            使用
+                        </p>
+                        <p class="mt-3 text-sm font-medium text-slate-400 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-ban text-red-400"></i>
+                            <span>不提供任何代理、分销及套壳服务</span>
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
