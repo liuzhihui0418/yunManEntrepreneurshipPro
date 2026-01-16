@@ -80,8 +80,6 @@ IxvqqP8kMKA53HYP3dt8rly1vwyhzke0ULf1Mw1f96TKRcMYV82+HD/ixVIR3Pdr5vURhAP71GEq7yy0
 HC76pO9EdBZp5ok/fvetxLN1TBNEPVuxAzooFBLXCoWhskEZC8tP7JksVKXiLv/kjUwRYwTUpSrBvMcEu
 WgYv
 """
-
-
 # 【支付宝公钥】(这里我专门做了修改)
 # 请打开你截图的那个 alipayPublicKey_RSA2.txt 文件
 # 全选 -> 复制 -> 直接覆盖粘贴到下面这个引号里
@@ -826,17 +824,13 @@ def delete_code_api():
     else:
         return jsonify({'success': False, 'message': '删除失败'})
 
-
-# ==========================================
-# 🟢 新增：API 文档页面路由
-# ==========================================
-@app.route('/yunmanapi')
-def api_documentation_page():
-    # 1. 这一步不需要强制登录校验，通常API文档是公开的
-    # 如果你想让它必须登录才能看，就加上 @login_required
-
-    # 2. 确保你把刚才那个白色的 html 代码保存为 templates/yunmanapi.html
-    return render_template('yunmanapi.html')
+# # ==========================================
+# # 🚀 魔云工坊 - 配音神器页面
+# # ==========================================
+# @app.route('/magic_workshop')
+# @login_required  # 必须登录才能进入
+# def magic_workshop_page():
+#     return render_template('magic_workshop.html')
 
 # ==========================================
 # 🚀 风格角色库 API (已完美移植合并)

@@ -271,17 +271,49 @@
 <div id="contactModal"
      class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm hidden"
      onclick="toggleContact(false)">
-    <div class="relative w-[400px] p-[2px] rounded-3xl overflow-hidden modal-enter" onclick="event.stopPropagation()">
+    <div class="relative w-full max-w-5xl p-[6px] rounded-3xl overflow-hidden modal-enter mx-4" onclick="event.stopPropagation()">
         <div class="absolute inset-0 bg-[conic-gradient(from_0deg,#f97316,#fbbf24,#f97316)] animate-spin-slow"></div>
-        <div class="relative bg-[#0F0F13] p-10 rounded-[22px] flex flex-col items-center gap-8">
+
+        <div class="relative bg-[#0F0F13] p-12 rounded-[20px] flex flex-col items-center gap-10">
             <button onclick="toggleContact(false)"
-                    class="absolute top-6 right-6 text-gray-600 hover:text-white transition-colors"><i
-                    class="fa-solid fa-xmark text-xl"></i></button>
-            <div class="text-center"><h3 class="text-3xl font-black text-white tracking-[4px] italic uppercase">
-                扫码联系官方</h3></div>
-            <div class="w-64 h-64 bg-white rounded-2xl p-2 shadow-inner overflow-hidden"><img
-                    src="https://yunman-1327419568.cos.ap-guangzhou.myqcloud.com/weixin.jpg"
-                    class="w-full h-full object-contain"></div>
+                    class="absolute top-6 right-6 text-gray-600 hover:text-white transition-colors">
+                <i class="fa-solid fa-xmark text-2xl"></i>
+            </button>
+
+            <div class="text-center">
+                <h3 class="text-4xl font-black text-white tracking-[4px] italic uppercase">
+                    扫码联系YunManGongFangAI官方商务
+                </h3>
+                <p class="text-gray-500 text-base mt-3">请根据您的需求扫描下方二维码，进入官方渠道学习创作</p>
+            </div>
+
+            <div class="flex flex-col md:flex-row items-center justify-center gap-10 w-full">
+
+                <div class="flex flex-col items-center gap-4">
+                    <div class="w-64 h-64 bg-white rounded-3xl p-3 shadow-inner overflow-hidden hover:scale-105 transition-transform duration-300">
+                        <img src="https://img.yunmanybcz.chat/shangwu.png"
+                             class="w-full h-full object-contain">
+                    </div>
+                    <span class="text-gray-400 font-bold text-lg tracking-widest">商务对接</span>
+                </div>
+
+                <div class="flex flex-col items-center gap-4">
+                    <div class="w-64 h-64 bg-white rounded-3xl p-3 shadow-inner overflow-hidden hover:scale-105 transition-transform duration-300">
+                        <img src="https://img.yunmanybcz.chat/weixin.jpg"
+                             class="w-full h-full object-contain">
+                    </div>
+                    <span class="text-gray-400 font-bold text-lg tracking-widest">公众号</span>
+                </div>
+
+                <div class="flex flex-col items-center gap-4">
+                    <div class="w-64 h-64 bg-white rounded-3xl p-3 shadow-inner overflow-hidden hover:scale-105 transition-transform duration-300">
+                        <img src="https://img.yunmanybcz.chat/qiwei55.png"
+                             class="w-full h-full object-contain">
+                    </div>
+                    <span class="text-gray-400 font-bold text-lg tracking-widest">官方企微群</span>
+                </div>
+
+            </div>
         </div>
     </div>
 </div>

@@ -3,8 +3,8 @@
 <head>
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YunManGongFangAI - 智能体控制台</title>
-    <link rel="icon" href="https://cdn.yunbaoymgf.chat/logo.png" type="image/png">
+    <title>YunManGongFangAI - 官方网站</title>
+    <link rel="icon" href="https://img.yunmanybcz.chat/yunmanlogo.png" type="image/png">
     <!-- 引入字体图标 -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -892,19 +892,19 @@
             font-weight: 500;
         }
 
-        /* ================= 联系我们弹窗 (完美复刻登录页特效) ================= */
+       /* ================= 联系我们弹窗 (1:1 完美复刻版) ================= */
 .contact-modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.85); /* 黑色遮罩 */
     backdrop-filter: blur(5px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10005; /* 确保在最顶层 */
+    z-index: 10005;
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s ease;
@@ -915,52 +915,60 @@
     visibility: visible;
 }
 
-/* 弹窗外壳：负责裁剪旋转背景 */
+/* 1. 外框容器：宽度设大，适应横排 */
 .contact-box-wrapper {
     position: relative;
-    width: 400px;
-    padding: 3px; /* 这里是流光边框的宽度 */
-    border-radius: 24px;
+    width: 95%;
+    max-width: 1024px; /* 对应 max-w-5xl */
+    padding: 3px; /* 流光边框宽度 */
+    border-radius: 24px; /* rounded-3xl */
     overflow: hidden;
-    transform: scale(0.9);
+    transform: scale(0.95);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 0 50px rgba(249, 115, 22, 0.3); /* 橙色光晕 */
+    box-shadow: 0 0 50px rgba(249, 115, 22, 0.2);
 }
 
 .contact-modal.active .contact-box-wrapper {
     transform: scale(1);
 }
 
-/* 旋转的流光背景 */
+/* 2. 旋转流光背景 */
 .contact-bg-rotate {
     position: absolute;
     top: -50%;
     left: -50%;
     width: 200%;
     height: 200%;
-    background: conic-gradient(from 0deg, #f97316, #fbbf24, #f97316); /* 橙色-黄色-橙色 */
+    background: conic-gradient(from 0deg, #f97316, #fbbf24, #f97316); /* 橙色系渐变 */
     animation: spin-slow 4s linear infinite;
     z-index: 1;
 }
 
-/* 内部黑色内容区 */
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 3. 黑色内容层 */
 .contact-content {
     position: relative;
-    background: #0F0F13; /* 深色背景 */
-    border-radius: 22px; /* 比外壳小一点 */
-    padding: 40px;
+    background: #0F0F13; /* 一模一样的深黑背景 */
+    border-radius: 22px;
+    padding: 48px; /* p-12 */
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 30px;
+    gap: 40px; /* gap-10 */
     z-index: 2;
+    width: 100%;
 }
 
+/* 关闭按钮 */
 .contact-close-btn {
     position: absolute;
-    top: 20px;
-    right: 20px;
-    color: rgba(255, 255, 255, 0.5);
+    top: 24px;
+    right: 24px;
+    color: #4b5563; /* text-gray-600 */
     font-size: 24px;
     cursor: pointer;
     transition: color 0.3s;
@@ -975,34 +983,104 @@
     color: #fff;
 }
 
+/* 标题样式 */
+.contact-header {
+    text-align: center;
+}
+
 .contact-title {
     font-size: 30px;
-    font-weight: 900;
+    font-weight: 900; /* font-black */
     font-style: italic;
     letter-spacing: 4px;
     color: #fff;
     text-transform: uppercase;
+    line-height: 1.2;
 }
 
-.contact-qr-box {
-    width: 260px;
-    height: 260px;
-    background: #fff;
-    border-radius: 16px;
-    padding: 10px;
-    box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+/* 适配大屏幕标题更大 */
+@media (min-width: 768px) {
+    .contact-title {
+        font-size: 36px; /* text-4xl */
+    }
 }
 
-.contact-qr-img {
+.contact-subtitle {
+    color: #6b7280; /* text-gray-500 */
+    font-size: 16px;
+    margin-top: 12px;
+}
+
+/* 4. 核心布局：Flex 横向排列 */
+.contact-grid {
+    display: flex;
+    flex-direction: row; /* 强制横排 */
+    justify-content: center;
+    align-items: center;
+    gap: 40px; /* gap-10 */
+    width: 100%;
+    flex-wrap: wrap; /* 屏幕极小时自动换行 */
+}
+
+/* 单个卡片项目 */
+.contact-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px; /* gap-4 */
+}
+
+/* 二维码容器：白色磨砂玻璃感 */
+.qr-container {
+    width: 256px; /* w-64 */
+    height: 256px; /* h-64 */
+    background: rgba(255, 255, 255, 1); /* 白色背景，还原图2效果 */
+    border-radius: 24px; /* rounded-3xl */
+    padding: 12px; /* p-3 */
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06); /* shadow-inner */
+    transition: transform 0.3s duration-300;
+    overflow: hidden;
+}
+
+.qr-container:hover {
+    transform: scale(1.05); /* hover:scale-105 */
+}
+
+.qr-container img {
     width: 100%;
     height: 100%;
     object-fit: contain;
 }
 
-/* 旋转动画定义 */
-@keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+/* 文字标签 */
+.qr-text {
+    color: #9ca3af; /* text-gray-400 */
+    font-weight: 700; /* font-bold */
+    font-size: 18px; /* text-lg */
+    letter-spacing: 0.1em; /* tracking-widest */
+}
+
+/* 5. 移动端适配：手机竖排，电脑横排 */
+@media (max-width: 768px) {
+    .contact-grid {
+        flex-direction: column; /* 手机上改回竖排，防止太小 */
+    }
+
+    .contact-title {
+        font-size: 24px;
+        letter-spacing: 2px;
+    }
+
+    .contact-box-wrapper {
+        width: 90%;
+        margin: 20px;
+        overflow-y: auto;
+        max-height: 90vh;
+    }
+
+    .contact-content {
+        padding: 30px 20px;
+    }
 }
 
     </style>
@@ -1021,7 +1099,7 @@
         <div class="nav-menu">
             <a href="#" class="active">首页</a>
             <a href="/style_library">角色风格库</a>
-            <a href="#">魔云工坊</a>
+<!--            <a href="/magic_workshop">魔云工坊</a>-->
             <a href="#">商城中心</a>
 <!--            <a href="/yunmanapi">api中心</a>-->
             <a href="#">联系我们</a>
@@ -1220,12 +1298,40 @@
         <div class="contact-bg-rotate"></div>
 
         <div class="contact-content">
-            <div class="contact-close-btn" id="closeContact">&times;</div> <h3 class="contact-title">扫码联系官方</h3>
+            <div class="contact-close-btn" id="closeContact">
+                <i class="fa-solid fa-xmark"></i>
+            </div>
 
-            <div class="contact-qr-box">
-                <img src="https://yunman-1327419568.cos.ap-guangzhou.myqcloud.com/weixin.jpg"
-                     class="contact-qr-img"
-                     alt="官方客服二维码">
+            <div class="contact-header">
+                <h3 class="contact-title">
+                    扫码联系YunManGongFangAI官方商务
+                </h3>
+                <p class="contact-subtitle">请根据您的需求扫描下方二维码，进入官方渠道学习创作</p>
+            </div>
+
+            <div class="contact-grid">
+
+                <div class="contact-item">
+                    <div class="qr-container">
+                        <img src="https://img.yunmanybcz.chat/shangwu.png" alt="商务对接">
+                    </div>
+                    <span class="qr-text">商务对接</span>
+                </div>
+
+                <div class="contact-item">
+                    <div class="qr-container">
+                        <img src="https://yunman-1327419568.cos.ap-guangzhou.myqcloud.com/weixin.jpg" alt="公众号">
+                    </div>
+                    <span class="qr-text">公众号</span>
+                </div>
+
+                <div class="contact-item">
+                    <div class="qr-container">
+                        <img src="https://img.yunmanybcz.chat/qiwei55.png" alt="官方企微群">
+                    </div>
+                    <span class="qr-text">官方企微群</span>
+                </div>
+
             </div>
         </div>
     </div>
