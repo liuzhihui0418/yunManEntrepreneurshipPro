@@ -18,7 +18,141 @@
             --glass-border: rgba(255, 255, 255, 0.08);
             --card-bg: rgba(20, 20, 30, 0.7);
         }
+/* 卡密信息弹窗样式 */
+.info-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8); /* 深色遮罩 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10002; /* 保证在最上层 */
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
 
+.info-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.info-modal-content {
+    background: rgba(20, 20, 35, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(139, 92, 246, 0.3); /* 紫色边框 */
+    border-radius: 16px;
+    width: 90%;
+    max-width: 400px;
+    padding: 0;
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.2);
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.info-modal.active .info-modal-content {
+    transform: scale(1);
+}
+
+.info-modal-header {
+    padding: 20px 25px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.info-modal-header i {
+    color: var(--primary-color);
+    margin-right: 10px;
+}
+
+.close-btn {
+    cursor: pointer;
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.5);
+    transition: color 0.2s;
+}
+
+.close-btn:hover {
+    color: #fff;
+}
+
+.info-modal-body {
+    padding: 30px 25px;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    font-size: 16px;
+}
+
+.info-item:last-child {
+    margin-bottom: 0;
+}
+
+.info-item .label {
+    color: rgba(255, 255, 255, 0.6);
+    width: 90px;
+    flex-shrink: 0;
+}
+
+.info-item .value {
+    color: #fff;
+    font-family: 'Courier New', monospace; /* 等宽字体显示卡密 */
+    font-weight: 500;
+    margin-right: 10px;
+}
+
+.info-item .value.code {
+    color: var(--secondary-color); /* 卡密高亮颜色 */
+    letter-spacing: 1px;
+}
+
+.info-item .value.date {
+    color: #10b981; /* 日期绿色 */
+}
+
+.copy-btn {
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.4);
+    transition: all 0.2s;
+}
+
+.copy-btn:hover {
+    color: var(--primary-color);
+    transform: scale(1.1);
+}
+
+.info-modal-footer {
+    padding: 15px 25px 25px;
+    text-align: center;
+}
+
+.modal-btn {
+    padding: 10px 30px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+}
+
+.modal-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+}
         * {
             margin: 0;
             padding: 0;
@@ -900,7 +1034,28 @@
         <div class="logout-spinner"></div>
         <div class="logout-loading-text">正在退出登录...</div>
     </div>
-
+<div class="info-modal" id="cardInfoModal">
+    <div class="info-modal-content">
+        <div class="info-modal-header">
+            <i class="fa-solid fa-id-card"></i> 账户信息
+            <span class="close-btn" id="closeCardInfo">&times;</span>
+        </div>
+        <div class="info-modal-body">
+            <div class="info-item">
+                <span class="label">当前卡密：</span>
+                <span class="value code" id="userCardKey">加载中...</span>
+                <i class="fa-regular fa-copy copy-btn" id="copyCardBtn" title="复制"></i>
+            </div>
+            <div class="info-item">
+                <span class="label">过期时间：</span>
+                <span class="value date" id="userExpiryDate">加载中...</span>
+            </div>
+        </div>
+        <div class="info-modal-footer">
+            <button class="modal-btn confirm" id="cardInfoOkBtn">确定</button>
+        </div>
+    </div>
+</div>
     <script>
         /**
          * 1. 炸裂粒子特效 (与登录页相同)
@@ -1221,6 +1376,87 @@
                 this.style.transform = 'translateY(-3px)';
             });
         });
+        // ================= 个人信息弹窗逻辑 =================
+
+const cardInfoModal = document.getElementById('cardInfoModal');
+const userProfileBtn = document.querySelector('.user-dropdown-item:first-child'); // 假设第一个"个人资料"按钮触发
+// 或者你可以给那个按钮加个 id="profileBtn"，然后 document.getElementById('profileBtn')
+
+const closeCardInfo = document.getElementById('closeCardInfo');
+const cardInfoOkBtn = document.getElementById('cardInfoOkBtn');
+const copyCardBtn = document.getElementById('copyCardBtn');
+const userCardKey = document.getElementById('userCardKey');
+const userExpiryDate = document.getElementById('userExpiryDate');
+
+// 打开弹窗并获取数据
+if (userProfileBtn) {
+    userProfileBtn.addEventListener('click', async (e) => {
+        e.preventDefault(); // 阻止默认跳转
+        // 关闭下拉菜单
+        document.getElementById('userDropdown').classList.remove('active');
+
+        // 显示弹窗并显示加载状态
+        cardInfoModal.classList.add('active');
+        userCardKey.textContent = "加载中...";
+        userExpiryDate.textContent = "加载中...";
+
+        try {
+            const response = await fetch('/api/user/card_info');
+            const result = await response.json();
+
+            if (result.success) {
+                userCardKey.textContent = result.data.card_key;
+                userExpiryDate.textContent = result.data.expiry_date;
+            } else {
+                userCardKey.textContent = "获取失败";
+                userExpiryDate.textContent = result.message || "未知错误";
+            }
+        } catch (error) {
+            console.error("API请求失败:", error);
+            userCardKey.textContent = "网络错误";
+            userExpiryDate.textContent = "请检查网络";
+        }
+    });
+}
+
+// 关闭弹窗逻辑
+function closeInfoModal() {
+    cardInfoModal.classList.remove('active');
+}
+
+if (closeCardInfo) closeCardInfo.addEventListener('click', closeInfoModal);
+if (cardInfoOkBtn) cardInfoOkBtn.addEventListener('click', closeInfoModal);
+
+// 点击遮罩关闭
+if (cardInfoModal) {
+    cardInfoModal.addEventListener('click', (e) => {
+        if (e.target === cardInfoModal) closeInfoModal();
+    });
+}
+
+// 复制卡密功能
+if (copyCardBtn) {
+    copyCardBtn.addEventListener('click', () => {
+        const text = userCardKey.textContent;
+        if (text && text !== "加载中..." && text !== "获取失败") {
+            navigator.clipboard.writeText(text).then(() => {
+                // 简单的复制成功提示，或者改变图标颜色
+                const originalClass = copyCardBtn.className;
+                copyCardBtn.className = "fa-solid fa-check"; // 变成对勾
+                copyCardBtn.style.color = "#10b981";
+
+                setTimeout(() => {
+                    copyCardBtn.className = originalClass; // 1秒后变回原样
+                    copyCardBtn.style.color = "";
+                }, 1000);
+            }).catch(err => {
+                console.error('复制失败', err);
+            });
+        }
+    });
+}
     </script>
+
 </body>
+
 </html>

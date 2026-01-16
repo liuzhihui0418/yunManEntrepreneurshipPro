@@ -58,49 +58,27 @@ ALIPAY_APP_ID = "2021006117616884"  # 你的APPID
 # 【私钥】(刚才检测通过的，这里不用动了，保留你刚才填的)
 
 PRIVATE_KEY_CONTENT = """
-
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCLce5pKBVWEjBpIHqE9j9Hh5/KnbnPU
-
 MqL7qKuQXN4ogEkggnejg62UyGXVchgIzzW5k3T2YmQG0bVgzR8el7/cJ8btg8e1d0gRZn+m8LK+0qGXJ
-
 Mdx+6rSGZbcZ6c+yaw+GlTQdnvEhPYq0zexN6SzxoWKkScOfEmyPXEo8vpb5TXFCPHuYn2hxnGhwePp5R
-
 fk5VPqrO5BcgJRd1cNNn+UWdmL54qVaA5CEQrHTaUTwIKmSYZ1BfGy0g0XH7qqxNs+WS9dCk5p7BCMpaK
-
 schkfmqdg/MwRzDmIDNtuufxe/AU7sqlsPoCGn95vR5XlOXcslps0gdLMeZ5IVN5y/tTAgMBAAECggEAY
-
 7oJfZ8zEylTAfw+Y1UREIEIYInI12G6WbVDF0ir4nxKQOfXUxlZoD936JlrAoZw/mgbBQWxAiTf1ddN9D
-
 A4PIs430KnMbBVwrzEU3jmKPDq7YjLliLkqA7RVVi+zRo5I5ulB+wyhm3xT6XDBhbZ7zi6OVvlUa2Gr+x
-
 NCGL0dG9LVCnQMnDeEj9IVJFsVG3Gk4tbdXRK6hoF6/hCVzNl9vBk8Kdftbf5ec19JTq6mf8TcenRNa9u
-
 8Y11PMaPOIVW5raheQFIj6BSLYm0AsAnVrfb8CXzPxijdykXAEgxiPtkspggcoBkN/x2/WfNivE/KqIxF
-
 HQ+vNJgIuH8pWnVoQKBgQDk02teYhhcsOWzhvY070UA5PeEhMYKq50DXbXpH5Y4skr2XnFUD6KC74M3bK
-
 ovsPk5osWwV1SARvh9BgPEsLXs6KDNbYf62GYe4aX2qJ+3Yhnajup7A5rmHwNAU7c8t/UbOdOdYg4Dw/J
-
 qIZEf4zEdBoz8KsHuULdLHBHR6r3R2QKBgQCcATpZ3ITOCvkXwB5kBgUS0l8/RN681VI4qNHHhH/4r4+o
-
 DEDOMHYvh/zj1IyGKFqG3jvD+iQRiPQbZ4Xlw0zGDyst/1250VGjTc3+xqPSmMOFH0qt3AMW/S7aVzmXA
-
 ls0FDjtef0tiYQwE2QdjPxmmWFUpwkZjTOmwA05v7JPCwKBgQCbuSWAfdGGgvxPSLGVJKAZE7k+ff0old
-
 Gs0MFTfSOGQg+xymPliR5XbRgnR9Qp0I5LIvLWJxhik+nXa5h06q1kJIwKQVgg5dPZgEaprefDrQdbLZd
-
 1T+bCZKiZxl8U+zva42eX23seJON8Rou037A0yJh5o7+Gp3eVreySpuW3QQKBgBbEwxxsZ+Gejl5eBtF4
-
 Y3MsywPz7EJJLBfi48Mn3nmQPfo715WAUy96vHkQA3ZtG1FFzBk9P9hjUaVSRaOUDnd1rUqoU6iUGUMpT
-
 uBZY32QGDEssPyQ+M55I0ZwppIYoPEH5osaW84ynN1bZyg89HWQ+zicrGJTTm+O5h9AkCijAoGBALzK5R
-
 IxvqqP8kMKA53HYP3dt8rly1vwyhzke0ULf1Mw1f96TKRcMYV82+HD/ixVIR3Pdr5vURhAP71GEq7yy0X
-
 HC76pO9EdBZp5ok/fvetxLN1TBNEPVuxAzooFBLXCoWhskEZC8tP7JksVKXiLv/kjUwRYwTUpSrBvMcEu
-
 WgYv
-
 """
 
 
@@ -733,6 +711,55 @@ def admin_login_page(): return render_template('admin_login.html')
 def get_codes_list():
     return jsonify({'success': True, 'codes': db_manager.get_all_codes()})
 
+
+# ==========================================
+# 🟢 新增：获取用户卡密信息接口
+# ==========================================
+@app.route('/api/user/card_info', methods=['GET'])
+def get_user_card_info():
+    # 1. 获取 Session
+    session_id = request.cookies.get('session_id')
+    if not session_id:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    # 2. 从 Redis 获取用户信息
+    user_info = redis_manager.get_session_info(session_id)
+    if not user_info:
+        return jsonify({'success': False, 'message': '会话已过期'}), 401
+
+    code = user_info.get('code')  # 这里 code 就是卡密/邀请码
+
+    # 3. 从数据库查询详细信息 (过期时间)
+    conn = pymysql.connect(**MYSQL_CONF)
+    try:
+        with conn.cursor() as cursor:
+            # 查询 invite_codes 表
+            sql = "SELECT code, expires_at, created_at FROM invite_codes WHERE code = %s"
+            cursor.execute(sql, (code,))
+            result = cursor.fetchone()
+
+            if result:
+                # 格式化时间
+                expires_at = result['expires_at']
+
+                # 如果 expires_at 是 None，可能是永久有效，或者逻辑不同，视你数据库结构而定
+                # 假设 expires_at 是 datetime 对象
+                expiry_str = expires_at.strftime('%Y-%m-%d %H:%M:%S') if expires_at else "永久有效"
+
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'card_key': result['code'],
+                        'expiry_date': expiry_str
+                    }
+                })
+            else:
+                return jsonify({'success': False, 'message': '未找到卡密信息'}), 404
+    except Exception as e:
+        print(f"查询卡密信息失败: {e}")
+        return jsonify({'success': False, 'message': '服务器内部错误'}), 500
+    finally:
+        conn.close()
 
 # ================= 🚀 新增：编辑与删除接口 =================
 
