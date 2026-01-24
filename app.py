@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import threading
 import os
 import uuid
@@ -7,7 +8,12 @@ import pymysql
 import base64
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
-
+import requests
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
+import secrets
+import base64
+import hashlib
 # 1. 引入 dotenv 用于加载环境变量
 from dotenv import load_dotenv
 
@@ -594,16 +600,19 @@ def get_realtime_stocks():
         conn.close()
 
 
+# 找到这个函数，全部替换成下面的内容
 @app.route('/admin/login', methods=['POST'])
 def admin_login():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
 
-    conn = pymysql.connect(**MYSQL_CONF)
+    conn = db_manager.get_connection()
+
     try:
-        with conn.cursor() as cursor:
-            # 1. 只查数据库，不看环境变量
+        # 🔥🔥🔥 核心修改在这里：加上 pymysql.cursors.DictCursor
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            # 1. 查询用户
             sql = "SELECT * FROM admin_users WHERE username=%s AND password=%s"
             cursor.execute(sql, (username, password))
             user = cursor.fetchone()
@@ -612,16 +621,17 @@ def admin_login():
                 # 2. 生成随机 Token
                 token = str(uuid.uuid4())
 
-                # 3. 🔥关键修改：把 Token 存入 Redis，有效期 24小时
-                # 键名：admin_session:token值
+                # 3. 存入 Redis (现在 user['id'] 可以正常使用了，因为 user 变成了字典)
                 redis_manager.r.setex(f"admin_session:{token}", 86400, user['id'])
 
                 resp = jsonify({'success': True, 'redirect': '/admin/dashboard'})
-                # 4. 发送 Cookie 给浏览器
                 resp.set_cookie('admin_token', token, max_age=86400)
                 return resp
             else:
                 return jsonify({'success': False, 'message': '账号密码错误'}), 401
+    except Exception as e:
+        print(f"管理员登录出错: {e}")
+        return jsonify({'success': False, 'message': '服务器内部错误'}), 500
     finally:
         conn.close()
 
@@ -640,6 +650,72 @@ def create_code():
         return jsonify({'success': True, 'message': '创建成功'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
+
+def get_cards_with_pagination(self, page=1, page_size=20, search=None):
+    # 引用 Redis
+    from db.redis_manager import redis_manager
+
+    # 缓存键名区分开
+    cache_key = f"admin:cards_list_page_{page}_size_{page_size}_search_{search or 'all'}"
+    try:
+        cached_data = redis_manager.r.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+    except:
+        pass
+
+    conn = self.get_connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            where_conditions = []
+            params = []
+
+            if search:
+                # 搜索卡密 card_key
+                where_conditions.append("card_key LIKE %s")
+                params.append(f"%{search}%")
+
+            where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+
+            # 获取总数
+            count_sql = f"SELECT COUNT(*) as total FROM cards {where_clause}"
+            cursor.execute(count_sql, params)
+            total_count = cursor.fetchone()['total']
+
+            # 分页查询
+            offset = (page - 1) * page_size
+            sql = f"SELECT * FROM cards {where_clause} ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            query_params = params + [page_size, offset]
+
+            cursor.execute(sql, query_params)
+            rows = list(cursor.fetchall())
+
+            # 格式化时间
+            for row in rows:
+                if row.get('created_at'): row['created_at'] = str(row['created_at'])
+
+            result = {
+                'cards': rows,
+                'pagination': {
+                    'current_page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': (total_count + page_size - 1) // page_size if page_size > 0 else 1
+                }
+            }
+
+            # 写入缓存 (30秒)
+            try:
+                redis_manager.r.setex(cache_key, 30, json.dumps(result))
+            except:
+                pass
+            return result
+    except Exception as e:
+        print(f"查询 cards 失败: {e}")
+        return {'cards': [], 'pagination': {'current_page': 1, 'total_items': 0}}
+    finally:
+        conn.close()
+
 
 
 @app.route('/admin/codes/batch', methods=['POST'])
@@ -680,7 +756,17 @@ def get_paginated_codes():
     return jsonify({'success': True, **db_manager.get_codes_with_pagination(request.args.get('page', 1, type=int),
                                                                             request.args.get('page_size', 20, type=int),
                                                                             request.args.get('search', ''))})
+@app.route('/admin/cards/paginated', methods=['GET'])
+def get_paginated_cards():
+    # 这里记得加鉴权
+    if not request.cookies.get('admin_token'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
 
+    return jsonify({'success': True, **db_manager.get_cards_with_pagination(
+        request.args.get('page', 1, type=int),
+        request.args.get('page_size', 20, type=int),
+        request.args.get('search', '')
+    )})
 
 @app.route('/api/check_session', methods=['GET'])
 def check_session():
@@ -1020,7 +1106,211 @@ def delete_character():
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "msg": str(e)})
+# 复用 PyQt5 中的加密逻辑
+class CardKeyEncryption:
+    def __init__(self):
+        self.seed = "yunmangongfang_2024_secret"
+        self.secret_key = hashlib.sha256(self.seed.encode()).digest()
+        self.bs = AES.block_size
 
+    def encrypt_api_key(self, real_api_key):
+        try:
+            iv = os.urandom(16) # 使用 os.urandom 替代 secrets
+            cipher = AES.new(self.secret_key, AES.MODE_CBC, iv)
+            encrypted = cipher.encrypt(pad(real_api_key.encode('utf-8'), self.bs))
+            combined = iv + encrypted
+            # 使用 urlsafe_b64encode 替换标准 base64
+            encrypted_b64 = base64.urlsafe_b64encode(combined).decode('utf-8')
+            return f"ymgfjc-{encrypted_b64}"
+        except Exception as e:
+            print(f"加密失败: {e}")
+            return None
+
+card_encryptor = CardKeyEncryption()
+
+# ================= 🚀 核心：调用远程API创建并存库 =================
+
+# 远程API配置 (如果 .env 里没有，这里做个兜底)
+REMOTE_API_HOST = "https://yunbaoymgf.chat"
+REMOTE_API_USER_ID = '129676'
+REMOTE_API_TOKEN = 'pD9xPhBvzuIISaKBdOfNIpjMzUSf'
+
+
+def get_remote_headers():
+    return {
+        'new-api-user': REMOTE_API_USER_ID,
+        'Authorization': f'Bearer {REMOTE_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+
+
+# 在 app.py 中替换 create_remote_card 函数
+@app.route('/admin/cards/create_remote', methods=['POST'])
+def create_remote_card():
+    # 1. 鉴权
+    if not request.cookies.get('admin_token'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    data = request.get_json()
+    base_name = data.get('name', '自动生成')
+    quota = data.get('quota', 50000000)
+    count = int(data.get('count', 1))  # 🔥 获取生成数量，默认为1
+
+    # 限制最大批量数量，防止超时
+    if count > 50:
+        return jsonify({'success': False, 'message': '单次最多生成50个'}), 400
+
+    created_cards = []
+    errors = []
+
+    conn = db_manager.get_connection()
+    try:
+        with conn.cursor() as cursor:
+            for i in range(count):
+                # 为每个卡密生成唯一的备注名（如果批量）
+                current_name = f"{base_name}_{i + 1}" if count > 1 else base_name
+
+                try:
+                    # 2. 请求远程服务器创建 Token
+                    payload = {
+                        "name": current_name,
+                        "remain_quota": quota,
+                        "expired_time": -1,
+                        "unlimited_quota": False,
+                        "model_limits_enabled": False,
+                        "model_limits": "",
+                        "group": "限时特价",
+                        "mj_image_mode": "default",
+                        "mj_custom_proxy": "",
+                        "selected_groups": [],
+                        "allow_ips": ""
+                    }
+
+                    # 发送请求
+                    resp = requests.post(
+                        f"{REMOTE_API_HOST}/api/token/",
+                        json=payload,
+                        headers=get_remote_headers(),
+                        timeout=10
+                    )
+
+                    resp_json = resp.json()
+
+                    if not resp_json.get('success'):
+                        errors.append(f"第{i + 1}个失败: {resp_json.get('message')}")
+                        continue
+
+                    # 3. 提取 Key
+                    data_field = resp_json.get("data")
+                    real_api_key = ""
+                    if isinstance(data_field, str):
+                        real_api_key = data_field
+                    elif isinstance(data_field, dict) and "key" in data_field:
+                        real_api_key = data_field["key"]
+
+                    if not real_api_key:
+                        errors.append(f"第{i + 1}个失败: 未获取到Key")
+                        continue
+
+                    # 4. 本地加密
+                    encrypted_key = card_encryptor.encrypt_api_key(real_api_key)
+
+                    # 5. 存入数据库
+                    sql = """
+                    INSERT INTO cards (card_key, max_devices, status, created_at) 
+                    VALUES (%s, 1, 'active', NOW())
+                    """
+                    cursor.execute(sql, (encrypted_key,))
+
+                    created_cards.append({
+                        'name': current_name,
+                        'card_key': encrypted_key
+                    })
+
+                    # 稍微停顿一下，防止远程接口限流
+                    if count > 1:
+                        time.sleep(0.2)
+
+                except Exception as e:
+                    errors.append(f"第{i + 1}个异常: {str(e)}")
+
+            conn.commit()
+
+            # 清除缓存
+            try:
+                redis_manager.r.delete("admin:cards_list_page*")
+                keys = redis_manager.r.keys("admin:cards_list_page*")
+                if keys: redis_manager.r.delete(*keys)
+            except:
+                pass
+
+    finally:
+        conn.close()
+
+    if not created_cards:
+        return jsonify({'success': False, 'message': f'生成失败: {"; ".join(errors)}'})
+
+    return jsonify({
+        'success': True,
+        'message': f'成功生成 {len(created_cards)} 个卡密',
+        'data': created_cards  # 返回列表
+    })
+
+# ================= 🚀 新增：卡密编辑与删除接口 =================
+
+# 在 app.py 中找到这个函数并替换
+@app.route('/admin/cards/update', methods=['POST'])
+def update_card_api():
+    """编辑卡密接口 (修复版：支持最大设备数修改)"""
+    if not request.cookies.get('admin_token'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    data = request.get_json()
+
+    card_id = data.get('id')
+    new_expiry = data.get('new_expiry')
+    status = data.get('status')
+    reset_device = data.get('reset_device')
+
+    # 🔥🔥🔥 1. 获取 max_devices 参数 🔥🔥🔥
+    max_devices = data.get('max_devices')
+
+    if not card_id:
+        return jsonify({'success': False, 'message': '参数缺失'})
+
+    # 🔥🔥🔥 2. 将 max_devices 传给数据库方法 🔥🔥🔥
+    # 注意参数顺序要对应：card_id, new_expiry_str, status, reset_device, max_devices
+    success = db_manager.update_card(
+        card_id,
+        new_expiry,
+        status,
+        reset_device,
+        max_devices  # <--- 必须传这个！
+    )
+
+    if success:
+        return jsonify({'success': True, 'message': '更新成功'})
+    else:
+        return jsonify({'success': False, 'message': '更新失败'})
+
+
+@app.route('/admin/cards/delete', methods=['POST'])
+def delete_card_api():
+    """删除卡密接口"""
+    if not request.cookies.get('admin_token'):
+        return jsonify({'success': False, 'message': '未登录'}), 401
+
+    data = request.get_json()
+    card_id = data.get('id')
+
+    if not card_id:
+        return jsonify({'success': False, 'message': '参数缺失'})
+
+    success = db_manager.delete_card(card_id)
+    if success:
+        return jsonify({'success': True, 'message': '删除成功'})
+    else:
+        return jsonify({'success': False, 'message': '删除失败'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

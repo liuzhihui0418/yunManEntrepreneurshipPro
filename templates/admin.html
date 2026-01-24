@@ -474,7 +474,7 @@
             <div class="nav-menu">
                 <a href="#" class="nav-item active" data-tab="dashboard">
                     <i class="fa-solid fa-chart-line"></i>
-                    <span>数据看板</span>
+                    <span>邀请码数据看板</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="codes">
                     <i class="fa-solid fa-key"></i>
@@ -482,7 +482,7 @@
                 </a>
                 <a href="#" class="nav-item" data-tab="users">
                     <i class="fa-solid fa-users"></i>
-                    <span>用户管理</span>
+                    <span>软件卡密创建</span>
                 </a>
                 <a href="#" class="nav-item" data-tab="analytics">
                     <i class="fa-solid fa-chart-pie"></i>
@@ -676,6 +676,58 @@
                     </div>
                 </div>
             </div>
+
+            <div class="content-tab" id="users-tab" style="display: none;">
+                <div class="content-header">
+                    <div class="header-title">
+                        <h1>云漫工坊3.0卡密</h1>
+                        <p>管理 cards 表中的授权卡密</p>
+                    </div>
+                    <div class="header-actions">
+                        </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>卡密列表</h3>
+                        <div class="table-actions">
+                            <input type="text" class="form-input" id="cards-search-input"
+                                   placeholder="搜索卡密..." style="width: 200px;" oninput="searchCards()">
+
+                             <button class="btn btn-primary" onclick="showCreateCardModal()">
+        <i class="fa-solid fa-cloud-bolt"></i> 生成远程卡密
+    </button>
+
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>卡密 (Card Key)</th>
+                                <th>状态</th>
+                                <th>最大设备数</th>
+                                <th>创建时间</th>
+                                <th>过期时间</th>
+            <th>操作</th> </tr>
+
+                        </thead>
+                        <tbody id="cards-table-body">
+                            </tbody>
+                    </table>
+                    <div class="pagination" id="cards-pagination">
+                        <div class="pagination-info" id="cards-page-info">第 1 页，共 1 页</div>
+                        <div class="pagination-controls">
+                            <button class="page-btn" onclick="changeCardsPage('prev')"><i class="fa-solid fa-chevron-left"></i></button>
+                            <span id="cards-page-number" class="page-number active">1</span>
+                            <button class="page-btn" onclick="changeCardsPage('next')"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+
+</div>
         </div>
     </div>
 
@@ -795,6 +847,86 @@
             </div>
         </div>
     </div>
+
+    <div class="modal" id="createCardModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>生成 3.0 卡密 (远程)</h3>
+            <button class="modal-close" onclick="hideCreateCardModal()">&times;</button>
+        </div>
+        <form id="createCardForm">
+            <div class="form-group">
+                <label class="form-label">备注名称</label>
+                <input type="text" class="form-input" id="cardName" placeholder="例如：测试卡01 (选填)">
+                <small style="color: rgba(255,255,255,0.5); font-size: 12px;">对应远程系统的 Token Name</small>
+            </div>
+<div class="form-group">
+    <label class="form-label">生成数量</label>
+    <input type="number" class="form-input" id="createCardCount" value="1" min="1" max="50">
+    <small style="color: rgba(255,255,255,0.5);">批量生成时，备注名称会自动添加后缀 _1, _2 等</small>
+</div>
+            <div class="form-group">
+                <label class="form-label">额度 (Quota)</label>
+                <input type="number" class="form-input" id="cardQuota" value="50000000" disabled style="opacity: 0.6">
+                <small style="color: rgba(255,255,255,0.5); font-size: 12px;">默认 50000000 (不可修改)</small>
+            </div>
+
+            <div class="form-actions" style="display: flex; gap: 15px; margin-top: 25px;">
+                <button type="button" class="btn btn-outline" onclick="hideCreateCardModal()" style="flex: 1;">取消</button>
+                <button type="submit" class="btn btn-primary" style="flex: 1;">
+                    <span id="cardBtnText">立即生成</span>
+                    <span id="cardBtnLoader" class="loader" style="display: none;"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <div class="modal" id="editCardModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>编辑 3.0 卡密</h3>
+            <button class="modal-close" onclick="hideEditCardModal()">&times;</button>
+        </div>
+        <form id="editCardForm">
+            <input type="hidden" id="editCardId">
+
+            <div class="form-group">
+                <label class="form-label">当前卡密</label>
+                <input type="text" class="form-input" id="editCardKeyDisplay" disabled style="opacity: 0.6">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">状态设置</label>
+                <select id="editCardStatus" class="form-input" style="background:#000;">
+                    <option value="active">正常启用 (Active)</option>
+                    <option value="disabled">封禁/禁用 (Disabled)</option>
+                </select>
+            </div>
+<div class="form-group">
+    <label class="form-label">最大设备数</label>
+    <input type="number" class="form-input" id="editCardMaxDevices" min="1" max="99">
+    <small style="color: rgba(255,255,255,0.4);">允许同时绑定的设备数量</small>
+</div>
+            <div class="form-group">
+                <label class="form-label">修改过期时间</label>
+                <input type="date" class="form-input" id="editCardExpiry">
+                <small style="color: rgba(255,255,255,0.5);">留空则不修改。修改将同步更新已激活设备的授权时间。</small>
+            </div>
+
+            <div class="form-group" style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px;">
+                <input type="checkbox" id="resetCardDevice" style="width: 18px; height: 18px;">
+                <label for="resetCardDevice" style="cursor: pointer; margin:0;">重置设备绑定 (允许新设备激活)</label>
+            </div>
+
+            <div class="form-actions" style="margin-top: 20px; display: flex; gap: 10px;">
+                <button type="button" class="btn btn-outline" style="flex:1" onclick="hideEditCardModal()">取消</button>
+                <button type="submit" class="btn btn-primary" style="flex:1">保存更改</button>
+            </div>
+        </form>
+    </div>
+</div>
+
     <script>
         /**
          * 1. 动态粒子背景特效
@@ -937,6 +1069,14 @@
                 data: [],
                 searchTerm: '',
                 filteredData: []
+            },
+            // 👇👇👇 新增这一段 👇👇👇
+            cards: {
+                currentPage: 1,
+                totalPages: 1,
+                totalItems: 0,
+                data: [],
+                searchTerm: ''
             }
         };
 
@@ -957,6 +1097,8 @@
                 // 加载对应数据
                 if (tabName === 'dashboard') loadDashboardData();
                 if (tabName === 'codes') loadCodesData();
+                // 👇👇👇 新增这一行 👇👇👇
+                if (tabName === 'users') loadCardsData();
             });
         });
 
@@ -1758,6 +1900,252 @@ async function loadDashboardData() {
 
             showNotification('导出成功', 'success');
         }
+        // ================= 🚀 新增：Cards 表格 JS 逻辑 =================
+
+        // 1. 加载 Cards 数据
+        async function loadCardsData() {
+            const tbody = document.getElementById('cards-table-body');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;"><div class="loader"></div> 加载中...</td></tr>';
+
+            const page = paginationConfig.cards.currentPage;
+            const search = paginationConfig.cards.searchTerm;
+
+            try {
+                // 调用后端接口
+                const res = await fetch(`/admin/cards/paginated?page=${page}&page_size=20&search=${encodeURIComponent(search)}`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    paginationConfig.cards.totalItems = data.pagination.total_items;
+                    paginationConfig.cards.totalPages = data.pagination.total_pages;
+
+                    renderCardsTable(data.cards);
+                    updateCardsPaginationUI();
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ef4444;">加载失败: ' + data.message + '</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ef4444;">网络错误</td></tr>';
+            }
+        }
+
+        // 2. 渲染表格 HTML
+        // 2. 渲染表格 HTML (更新版)
+// 在 <script> 标签内找到 renderCardsTable 函数，替换为：
+
+// 在 admin.html 的 <script> 部分找到这个函数
+// 🔥🔥🔥 渲染卡密表格 (包含过期时间和编辑按钮) 🔥🔥🔥
+function renderCardsTable(list) {
+    const tbody = document.getElementById('cards-table-body');
+    if (!list || list.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#aaa;">暂无数据</td></tr>'; return; }
+
+    tbody.innerHTML = list.map(item => {
+        const statusClass = item.status === 'active' ? 'status-active' : 'status-expired';
+        const statusText = item.status === 'active' ? '正常' : (item.status === 'disabled' ? '已封禁' : item.status);
+        const createdDate = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+
+        // 处理过期时间
+        const rawExpiry = item.expiry_date || '';
+        const displayExpiry = rawExpiry ? rawExpiry : '<span style="color:#666">未激活</span>';
+
+        const safeKey = item.card_key.replace(/'/g, "&apos;");
+        // 🔥 传入 max_devices
+        const maxDev = item.max_devices || 1;
+
+        return `
+        <tr class="hover:bg-white/5 transition-colors">
+            <td style="color:#666; font-size:12px;">${item.id}</td>
+            <td style="font-family:monospace; color:var(--primary-color); font-weight:bold;">${safeKey}</td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            <td style="text-align:center;">${maxDev}</td>
+            <td style="color:rgba(255,255,255,0.6); font-size:13px;">${createdDate}</td>
+            <td style="color:#f59e0b; font-size:13px; font-weight:bold;">${displayExpiry}</td>
+            <td>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-outline" style="padding:6px 12px; font-size:12px; height:32px;"
+                        onclick="openEditCardModal('${item.id}', '${safeKey}', '${item.status}', '${rawExpiry}', '${maxDev}')">
+                        <i class="fa-solid fa-gear"></i> 编辑
+                    </button>
+                    <button class="btn btn-outline" style="padding:6px 12px; font-size:12px; height:32px; border-color:rgba(239,68,68,0.4); color:#fca5a5;"
+                        onclick="deleteCard('${item.id}')">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+        // 3. 翻页逻辑
+        function changeCardsPage(action) {
+            const cfg = paginationConfig.cards;
+            if (action === 'prev' && cfg.currentPage > 1) cfg.currentPage--;
+            if (action === 'next' && cfg.currentPage < cfg.totalPages) cfg.currentPage++;
+            loadCardsData();
+        }
+
+        // 4. 搜索逻辑
+        let searchTimeout;
+        function searchCards() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const val = document.getElementById('cards-search-input').value.trim();
+                paginationConfig.cards.searchTerm = val;
+                paginationConfig.cards.currentPage = 1; // 重置到第一页
+                loadCardsData();
+            }, 500); // 防抖
+        }
+
+        // 5. 更新分页 UI
+        function updateCardsPaginationUI() {
+            const cfg = paginationConfig.cards;
+            document.getElementById('cards-page-info').innerText =
+                `第 ${cfg.currentPage} 页，共 ${cfg.totalPages} 页，总计 ${cfg.totalItems} 条`;
+            document.getElementById('cards-page-number').innerText = cfg.currentPage;
+
+            // 按钮禁用状态
+            const btns = document.querySelectorAll('#cards-pagination .page-btn');
+            btns[0].disabled = cfg.currentPage <= 1; // 上一页
+            btns[1].disabled = cfg.currentPage >= cfg.totalPages; // 下一页
+        }
+
+// ================= 🚀 新增：远程卡密生成逻辑 (完善版) =================
+
+function showCreateCardModal() {
+    document.getElementById('createCardModal').style.display = 'flex';
+    document.getElementById('cardName').value = 'VIP用户_' + Math.floor(Math.random() * 10000);
+    // 重置数量
+    if(document.getElementById('createCardCount')) {
+        document.getElementById('createCardCount').value = 1;
+    }
+}
+
+function hideCreateCardModal() {
+    document.getElementById('createCardModal').style.display = 'none';
+}
+// 提交远程生成请求
+document.getElementById('createCardForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const name = document.getElementById('cardName').value;
+    // 🔥 获取数量
+    const count = document.getElementById('createCardCount').value || 1;
+
+    const btn = this.querySelector('button[type="submit"]');
+    btn.innerText = `正在生成 ${count} 个...`; // 动态显示状态
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/admin/cards/create_remote', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: name,
+                count: count // 🔥 传递数量
+            })
+        });
+
+        const res = await response.json();
+
+        if (res.success) {
+            showNotification(res.message, 'success'); // 显示后端返回的成功消息
+            hideCreateCardModal();
+            loadCardsData(); // 刷新列表
+        } else {
+            showNotification(`❌ 部分或全部失败: ${res.message}`, 'error');
+        }
+
+    } catch (err) {
+        showNotification('网络请求失败', 'error');
+        console.error(err);
+    } finally {
+        // 恢复按钮状态
+        btn.innerHTML = '<span id="cardBtnText">立即生成</span><span id="cardBtnLoader" class="loader" style="display: none;"></span>';
+        btn.disabled = false;
+    }
+});
+
+
+        // ================= 🚀 卡密编辑与删除逻辑 =================
+
+// 打开编辑弹窗
+// 3. 打开编辑弹窗逻辑
+// 打开编辑卡密弹窗
+window.openEditCardModal = function(id, key, status, expiry, maxDevices) {
+    document.getElementById('editCardModal').style.display = 'flex';
+    document.getElementById('editCardId').value = id;
+    document.getElementById('editCardKeyDisplay').value = key;
+    document.getElementById('editCardStatus').value = status || 'active';
+    document.getElementById('editCardExpiry').value = expiry || '';
+    // 🔥 回显设备数
+    document.getElementById('editCardMaxDevices').value = maxDevices || 1;
+    document.getElementById('resetCardDevice').checked = false;
+}
+
+window.hideEditCardModal = function() { document.getElementById('editCardModal').style.display = 'none'; }
+
+// 提交编辑
+document.getElementById('editCardForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('editCardId').value;
+    const status = document.getElementById('editCardStatus').value;
+    const expiry = document.getElementById('editCardExpiry').value;
+    const reset = document.getElementById('resetCardDevice').checked;
+    // 🔥 获取设备数
+    const maxDevices = document.getElementById('editCardMaxDevices').value;
+
+    const btn = this.querySelector('button[type="submit"]');
+    btn.innerText = '保存中...'; btn.disabled = true;
+
+    try {
+        const response = await fetch('/admin/cards/update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                id: id, status: status, new_expiry: expiry, reset_device: reset, max_devices: maxDevices
+            })
+        });
+        const res = await response.json();
+        if (res.success) {
+            showNotification('更新成功', 'success');
+            hideEditCardModal();
+            loadCardsData();
+        } else { showNotification(res.message, 'error'); }
+    } catch (e) { showNotification('网络错误', 'error'); }
+    finally { btn.innerText = '保存更改'; btn.disabled = false; }
+});
+
+function hideEditCardModal() {
+    document.getElementById('editCardModal').style.display = 'none';
+}
+
+
+// 删除卡密
+window.deleteCard = async function(id) {
+    if (!confirm('⚠️ 警告：确定要删除此卡密吗？\n删除后所有已激活的设备将立即掉线！')) return;
+
+    try {
+        const response = await fetch('/admin/cards/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: id })
+        });
+        const res = await response.json();
+
+        if (res.success) {
+            showNotification('删除成功', 'success');
+            loadCardsData();
+        } else {
+            showNotification(res.message, 'error');
+        }
+    } catch (e) {
+        showNotification('网络错误', 'error');
+    }
+}
+
     </script>
 </body>
 </html>

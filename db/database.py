@@ -525,6 +525,91 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_cards_with_pagination(self, page=1, page_size=20, search=None):
+        """
+        分页查询 cards 表 (关联 license_bindings 获取过期时间)
+        """
+        from db.redis_manager import redis_manager
+
+        # 缓存键名区分开
+        cache_key = f"admin:cards_list_page_{page}_size_{page_size}_search_{search or 'all'}"
+        try:
+            cached_data = redis_manager.r.get(cache_key)
+            if cached_data:
+                return json.loads(cached_data)
+        except:
+            pass
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                where_conditions = []
+                params = []
+
+                if search:
+                    where_conditions.append("c.card_key LIKE %s")
+                    params.append(f"%{search}%")
+
+                where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+
+                # 1. 获取总数
+                count_sql = f"SELECT COUNT(*) as total FROM cards c {where_clause}"
+                cursor.execute(count_sql, params)
+                total_row = cursor.fetchone()
+                total_count = total_row['total'] if total_row else 0
+
+                # 2. 分页查询 (🔥 重点：子查询获取过期时间)
+                # 如果没激活，expiry_date 就是 NULL，前端会显示 '-'
+                offset = (page - 1) * page_size
+
+                sql = f"""
+                    SELECT 
+                        c.*,
+                        (SELECT expiry_date FROM license_bindings lb WHERE lb.card_key = c.card_key ORDER BY id DESC LIMIT 1) as expiry_date
+                    FROM cards c
+                    {where_clause}
+                    ORDER BY c.created_at DESC 
+                    LIMIT %s OFFSET %s
+                """
+                query_params = params + [page_size, offset]
+
+                cursor.execute(sql, query_params)
+                rows = list(cursor.fetchall())
+
+                # 3. 格式化时间
+                for row in rows:
+                    if row.get('created_at'):
+                        row['created_at'] = str(row['created_at'])
+
+                    # 🔥 格式化过期时间 (如果有的话)
+                    # 数据库里是 datetime 对象，转成字符串 "YYYY-MM-DD"
+                    if row.get('expiry_date'):
+                        row['expiry_date'] = str(row['expiry_date']).split(' ')[0]
+                    else:
+                        row['expiry_date'] = ''
+
+                result = {
+                    'cards': rows,
+                    'pagination': {
+                        'current_page': page,
+                        'page_size': page_size,
+                        'total_items': total_count,
+                        'total_pages': (total_count + page_size - 1) // page_size if page_size > 0 else 1
+                    }
+                }
+
+                # 写入缓存 (30秒)
+                try:
+                    redis_manager.r.setex(cache_key, 30, json.dumps(result))
+                except:
+                    pass
+                return result
+        except Exception as e:
+            print(f"查询 cards 失败: {e}")
+            return {'cards': [], 'pagination': {'current_page': 1, 'total_items': 0}}
+        finally:
+            conn.close()
+
     # ================= 🚀 新增：检查设备绑定一致性 =================
     def check_device_consistency(self, code, device_id):
         """
@@ -558,6 +643,106 @@ class DatabaseManager:
                 return False
         except Exception as e:
             print(f"设备一致性检查失败: {e}")
+            return False
+        finally:
+            conn.close()
+
+    # ================= 🚀 新增：编辑与删除卡密逻辑 =================
+
+    def update_card(self, card_id, new_expiry_str=None, status=None, reset_device=False, max_devices=None):
+        """
+        更新卡密信息（修复版）
+        """
+        from db.redis_manager import redis_manager
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 1. 查找卡密 Key
+                cursor.execute("SELECT card_key FROM cards WHERE id = %s", (card_id,))
+                res = cursor.fetchone()
+                if not res: return False
+
+                # 🔥🔥🔥 直接取值，不用判断 tuple 🔥🔥🔥
+                card_key = res['card_key']
+
+                # 2. 更新 cards 表 (状态 和 最大设备数)
+                card_updates = []
+                card_params = []
+
+                if status:
+                    card_updates.append("status = %s")
+                    card_params.append(status)
+
+                # 🔥 新增：更新最大设备数
+                if max_devices is not None:
+                    card_updates.append("max_devices = %s")
+                    card_params.append(int(max_devices))
+
+                if card_updates:
+                    sql = f"UPDATE cards SET {', '.join(card_updates)} WHERE id = %s"
+                    card_params.append(card_id)
+                    cursor.execute(sql, card_params)
+
+                # 3. 处理过期时间和设备重置 (同步更新 license_bindings 表)
+                if new_expiry_str:
+                    if len(new_expiry_str) == 10:
+                        new_expiry_str += " 23:59:59"
+                    cursor.execute("UPDATE license_bindings SET expiry_date = %s WHERE card_key = %s",
+                                   (new_expiry_str, card_key))
+
+                if reset_device:
+                    cursor.execute("DELETE FROM license_bindings WHERE card_key = %s", (card_key,))
+
+                conn.commit()
+
+                # 清除缓存
+                try:
+                    keys = redis_manager.r.keys("admin:cards_list_page*")
+                    if keys: redis_manager.r.delete(*keys)
+                except:
+                    pass
+                return True
+        except Exception as e:
+            print(f"更新卡密失败: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def delete_card(self, card_id):
+        """
+        删除卡密及其绑定关系（修复版）
+        """
+        from db.redis_manager import redis_manager
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 1. 获取卡密 Key
+                cursor.execute("SELECT card_key FROM cards WHERE id = %s", (card_id,))
+                res = cursor.fetchone()
+                if not res: return False
+
+                # 🔥🔥🔥 直接取值，不用判断 tuple 🔥🔥🔥
+                card_key = res['card_key']
+
+                # 2. 删除绑定关系
+                cursor.execute("DELETE FROM license_bindings WHERE card_key = %s", (card_key,))
+
+                # 3. 删除卡密本体
+                cursor.execute("DELETE FROM cards WHERE id = %s", (card_id,))
+
+                conn.commit()
+
+                # 清除缓存
+                try:
+                    keys = redis_manager.r.keys("admin:cards_list_page*")
+                    if keys: redis_manager.r.delete(*keys)
+                except:
+                    pass
+                return True
+        except Exception as e:
+            print(f"删除卡密失败: {e}")
             return False
         finally:
             conn.close()
