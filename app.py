@@ -867,6 +867,38 @@ def get_user_card_info():
     finally:
         conn.close()
 
+# ================= 🚀 新增：另一个项目邀请码验证 =================
+@app.route('/api/validate-invite', methods=['POST'])
+def api_validate_invite():
+    """
+    专门给 Api 管理后台登录页面调用的：第二步邀请码+设备指纹验证接口
+    """
+    try:
+        data = request.get_json()
+        code = data.get('invite_code', '').strip().upper()
+        device_id = data.get('device_id', '').strip()
+
+        if not code or not device_id:
+            return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+        # 1. 直接调用你 database.py 里已经写好的一机一码绑定逻辑
+        bind_result = db_manager.check_and_bind_device(code, device_id)
+
+        if not bind_result['success']:
+            return jsonify({'success': False, 'message': bind_result['msg']})
+
+        # 2. 检查邀请码是否过期/禁用 (调用你现有的严格检查方法)
+        if not db_manager.check_code_is_valid_strict(code):
+            return jsonify({'success': False, 'message': '邀请码已过期或被禁用'})
+
+        # 验证通过
+        return jsonify({'success': True, 'message': '双重验证成功'})
+
+    except Exception as e:
+        print(f"Invite Validate Error: {e}")
+        return jsonify({'success': False, 'message': '系统验证繁忙'}), 500
+
+
 # ================= 🚀 新增：编辑与删除接口 =================
 
 @app.route('/admin/codes/update', methods=['POST'])
