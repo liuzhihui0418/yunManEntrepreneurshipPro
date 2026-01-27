@@ -868,10 +868,11 @@ def get_user_card_info():
         conn.close()
 
 # ================= 🚀 新增：另一个项目邀请码验证 =================
+# ================= 🚀 新增：专门给管理后台调用的双重验证接口 =================
 @app.route('/api/validate-invite', methods=['POST'])
-def api_validate_invite():
+def api_validate_invite_secure():
     """
-    专门给 Api 管理后台登录页面调用的：第二步邀请码+设备指纹验证接口
+    Api管理后台登录 - 第二步：邀请码+设备指纹验证
     """
     try:
         data = request.get_json()
@@ -879,24 +880,23 @@ def api_validate_invite():
         device_id = data.get('device_id', '').strip()
 
         if not code or not device_id:
-            return jsonify({'success': False, 'message': '参数不完整'}), 400
+            return jsonify({'success': False, 'message': '请提供完整的验证信息'}), 400
 
-        # 1. 直接调用你 database.py 里已经写好的一机一码绑定逻辑
+        # 1. 调用一机一码绑定逻辑（如果该码没绑定，则绑定；如果已绑定，则对比指纹）
         bind_result = db_manager.check_and_bind_device(code, device_id)
-
         if not bind_result['success']:
             return jsonify({'success': False, 'message': bind_result['msg']})
 
-        # 2. 检查邀请码是否过期/禁用 (调用你现有的严格检查方法)
+        # 2. 检查邀请码本身的合法性（是否启用、是否过期）
         if not db_manager.check_code_is_valid_strict(code):
-            return jsonify({'success': False, 'message': '邀请码已过期或被禁用'})
+            return jsonify({'success': False, 'message': '授权验证失败：该码已过期或被禁用'})
 
-        # 验证通过
-        return jsonify({'success': True, 'message': '双重验证成功'})
+        # 3. 验证通过
+        return jsonify({'success': True, 'message': '安全验证通过'})
 
     except Exception as e:
-        print(f"Invite Validate Error: {e}")
-        return jsonify({'success': False, 'message': '系统验证繁忙'}), 500
+        print(f"❌ 邀请码二次验证异常: {e}")
+        return jsonify({'success': False, 'message': '验证服务繁忙，请重试'}), 500
 
 
 # ================= 🚀 新增：编辑与删除接口 =================
